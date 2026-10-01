@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zack – Zauberer wider Willen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07040e;
+    --bar: #1a1024;
+    --btn: #2c1c3c;
+    --btn-hi: #4c2c6c;
+    --text: #e8d8ff;
+    --muted: #8a7aa8;
+    --gold: #ffd040;
+    --frame: #2a1a3a;
+    --edge: #4c3464;
+    --edge-lo: #100818;
+    --panel: #1a1024;
+    color-scheme: dark; /* bewusst nur dunkel: Nachthimmel-/VGA-Look */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "VT323", "Courier New", monospace; overflow: hidden; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; padding-inline: 16px; }
+  #game { display: block; image-rendering: pixelated; image-rendering: crisp-edges; cursor: none; touch-action: none; background: #000; box-shadow: 0 0 0 2px var(--frame), 0 10px 40px rgba(0,0,0,.6); }
+  #bar { display: flex; gap: 6px; padding: 6px 8px; flex-wrap: wrap; justify-content: center; }
+  #bar button { font: inherit; font-size: 18px; color: var(--text); background: var(--btn); border: 1px solid var(--edge); border-bottom-color: var(--edge-lo); border-right-color: var(--edge-lo); padding: 2px 12px; cursor: pointer; }
+  #bar button:hover { background: var(--btn-hi); color: var(--gold); }
+  #bar button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  #toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: var(--btn); border: 1px solid #8c5cb4; padding: 4px 14px; font-size: 20px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #help { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4,2,10,.85); padding: 16px; }
+  #help.show { display: flex; }
+  @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+  #help div { max-width: 560px; background: var(--panel); border: 2px solid var(--edge); padding: 16px 20px; font-size: 20px; line-height: 1.15; }
+  #help h2 { margin: 0 0 8px; color: var(--gold); font-weight: normal; font-size: 30px; }
+  #help b { color: #80e0f0; font-weight: normal; }
+  #help p { margin: 6px 0; }
+</style>
+</head>
+<body>
+<canvas id="game" width="640" height="400"></canvas>
+<div id="bar">
+  <button id="btnSave">Speichern</button>
+  <button id="btnLoad">Laden</button>
+  <button id="btnNew">Neustart</button>
+  <button id="btnSound">♪ Ton</button>
+  <button id="btnHelp">Hilfe</button>
+</div>
+<div id="toast"></div>
+<div id="help"><div>
+  <h2>So wird gespielt</h2>
+  <p><b>Verb anklicken</b>, dann ein Objekt in der Szene oder im Inventar – z.&nbsp;B. „Benutze“ → „Stock“ → „Elsternnest“.</p>
+  <p><b>Rechtsklick</b> auf ein Objekt schaut es direkt an.</p>
+  <p><b>Leertaste / Klick</b> überspringt Sprechtexte.</p>
+  <p>Mit Figuren reden lohnt sich: Sie verraten oft, wie es weitergeht.</p>
+  <p>Das Spiel speichert beim Raumwechsel automatisch („Weiterspielen“ im Titelbild).</p>
+  <p style="color:var(--muted)">(Klicken zum Schließen)</p>
+</div></div>
+<script src="js/gfx.js" charset="utf-8"></script>
+<script src="js/sprites.js" charset="utf-8"></script>
+<script src="js/audio.js" charset="utf-8"></script>
+<script src="js/engine.js" charset="utf-8"></script>
+<script src="js/items.js" charset="utf-8"></script>
+<script src="js/rooms_a.js" charset="utf-8"></script>
+<script src="js/rooms_b.js" charset="utf-8"></script>
+<script src="js/main.js" charset="utf-8"></script>
+</body>
+</html>
