@@ -566,7 +566,7 @@ function drawZack(ctx) {
   const frame = z.walking ? Math.floor(z.animT / 0.12) % 4 : 's';
   const mouth = E.talking === 'zack' && Math.floor(E.t * 7) % 2 === 0;
   const dirKey = z.dir === 'left' ? 'right' : z.dir;
-  const img = zackSprite(dirKey, frame, mouth, z.hat);
+  const img = zackSprite(dirKey, frame, mouth, z.hat, !z.walking && blink(17));
   const w = ZACK_O.w * s, h = ZACK_O.h * s;
   const dx = Math.round(z.x - ZACK_O.ox * s), dy = Math.round(z.y - ZACK_O.oy * s);
   // Schatten

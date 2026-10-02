@@ -3,6 +3,15 @@
 Sammlung von Ausbau-Ideen, grob nach Aufwand sortiert. Alles hier ist optional –
 das Spiel ist vollständig spielbar. Abhaken, was gefällt, oder ergänzen.
 
+## Frisch umgesetzt (2. Oktober 2026, Politur-Runden)
+
+- Weiche Bodenschatten für alle Figuren und das Schaukelpferd
+- Flackerndes Kaminlicht (Taverne), pulsierendes Kessellicht (Hexe, rosa nach Trank), Feuerschalen mit Glow am Turmtor
+- Wasser-Schimmern im Stinkesumpf, Vögel über Lichtung und Dorf, Brunnen-Glitzern, fallendes Eichenblatt
+- Blitz und Donner am Dachboden (alle 14 s, Donner folgt versetzt)
+- Zack blinzelt, wenn er steht; Sternschnuppe im Titelbild
+- Musik: eigener düsterer Track „Turmtor", dezente Stereo-Aufteilung (Melodie rechts, Arpeggio links), neuer Donner-Effekt
+
 ## Klein (ein Nachmittag)
 
 - **Statistiken im Abspann**: Spielzeit, geschaute Objekte, verbrauchte Tipps, „gelachte Male beim Troll“ – alles in Flags mitzählen ist billig und macht den Abspann persönlich.
@@ -11,6 +20,10 @@ das Spiel ist vollständig spielbar. Abhaken, was gefällt, oder ergänzen.
 - **Zufalls-Gerede**: Wenn Zack 2 Minuten nichts tut, sagt er gelegentlich einen Raum-spezifischen Spruch („Hier riecht es nach Abenteuer. Und nach Sumpf.“).
 - **Titelbild-Politur**: Zack auf dem Titel animiert den Hut heben, wenn die Maus ihn berührt.
 - **URL-Parameter für Tester**: `?fast` (Sprechblasen 3× schneller), `?debug` (Hotspots dauerhaft ein).
+- **Schrittgeräusche**: sehr leise Ticks im Gehrhythmus (wie klassische Adventures). Eigener SFX `step`, an die Walk-Animation gekoppelt – Lautstärke klein genug zum Testen.
+- **Ambiente-Loops je Raum**: Dauerregen am Dachboden, Blubbern im Sumpf, Gemurmel in der Taverne – alles per WebAudio-Noise/Modulation generiert, keine Dateien nötig.
+- **Foto-Modus**: Taste P blendet die Menüleiste aus (schöne Screenshots ohne UI).
+- **Winter-Parameter**: `?winter` lässt in allen Außenräumen Schnee fallen – saisonale Screenshots/Posts.
 
 ## Mittel (ein Wochenende)
 
@@ -21,6 +34,8 @@ das Spiel ist vollständig spielbar. Abhaken, was gefällt, oder ergänzen.
 - **Fotomodus/Tauschhaus der Erinnerungen**: Screenshot-Knopf, der die Canvas als PNG exportiert (`canvas.toDataURL`, Download-Link).
 - **Gamepad-Support**: Virtueller Cursor per linkem Stick, A = Aktion, X = Anschauen. Die Pointereingabe in `engine.js` ist schon sauber getrennt, das ist ein Adapter davor.
 - **Soundtrack-Auswahl**: Menüknopf, um zwischen Chiptune und „stumm, nur Effekte“ zu wechseln – manche streamen nebenbei Podcasts.
+- **Musik-Dynamik im Gespräch**: In Dialogen das Schlagzeug kurz leiser ziehen (duck-Mechanik existiert schon für TTS) – Radiosender-Moderation fürs Ohr.
+- **Vogelchor über der Lichtung**: gelegentliche piepsige Melodiestimme über dem Wald-Track, nur draußen und tagsüber (Uhrzeit-abhängig).
 
 ## Groß (ein Projekt)
 
@@ -41,5 +56,6 @@ das Spiel ist vollständig spielbar. Abhaken, was gefällt, oder ergänzen.
 
 1. ElevenLabs-Stimmen ausprobieren und mit einer zweiten Stimme pro NPC verfeinern (mittlerer Aufwand, großer Effekt)
 2. Statistiken + Erfolge (klein, motiviert zum Weiterspielen)
-3. Englische Übersetzung (größter Reichweite-Hebel)
-4. Kapitel 2 skizzieren: erst 2 Räume als Proof-of-Concept
+3. Ambiente-Loops je Raum (klein, macht die Welt sofort lebendiger)
+4. Englische Übersetzung (größter Reichweite-Hebel)
+5. Kapitel 2 skizzieren: erst 2 Räume als Proof-of-Concept

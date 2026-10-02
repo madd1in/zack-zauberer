@@ -8,8 +8,8 @@ const OUT = '#14101c'; // Konturfarbe
 
 // ---------------- ZACK ----------------
 const ZACK_O = { w: 30, h: 66, ox: 15, oy: 64 };
-function zackSprite(dir, frame, mouth, hat) {
-  const key = `zack|${dir}|${frame}|${mouth}|${hat}`;
+function zackSprite(dir, frame, mouth, hat, blink) {
+  const key = `zack|${dir}|${frame}|${mouth}|${hat}|${blink || ''}`;
   return cached(key, () => {
     const p = spr(ZACK_O.w, ZACK_O.h, ZACK_O.ox, ZACK_O.oy, (R, P) => {
       const sk = '#f2c29a', skS = '#d4946a', hr = '#d8641c', hrS = '#a0400c', hrL = '#f49040';
@@ -45,7 +45,8 @@ function zackSprite(dir, frame, mouth, hat) {
         R(-4, -34 + ub, 8, 8, sk); R(-4, -27 + ub, 8, 1, skS); R(3, -33 + ub, 1, 6, skS);
         P(-5, -31 + ub, sk); P(4, -31 + ub, skS);
         if (dir === 'down') {
-          R(-2, -31 + ub, 1, 2, ey); R(1, -31 + ub, 1, 2, ey);
+          if (blink) { R(-2, -31 + ub, 1, 1, skS); R(1, -31 + ub, 1, 1, skS); }
+          else { R(-2, -31 + ub, 1, 2, ey); R(1, -31 + ub, 1, 2, ey); }
           R(-3, -33 + ub, 2, 1, hrS); R(1, -33 + ub, 2, 1, hrS);
           P(0, -29 + ub, skS);
           P(-3, -29 + ub, '#e8a07a'); P(2, -29 + ub, '#e8a07a');
@@ -90,7 +91,8 @@ function zackSprite(dir, frame, mouth, hat) {
         R(-1, -26 + ub, 2, 1, skS);
         R(-3, -34 + ub, 7, 8, sk); R(-3, -27 + ub, 7, 1, skS);
         P(4, -31 + ub, sk); P(4, -30 + ub, skS);
-        R(2, -32 + ub, 1, 2, ey); R(1, -33 + ub, 3, 1, hrS);
+        if (blink) R(2, -32 + ub, 1, 1, skS); else R(2, -32 + ub, 1, 2, ey);
+        R(1, -33 + ub, 3, 1, hrS);
         P(-1, -31 + ub, skS); P(-1, -30 + ub, skS);
         if (mouth) { R(2, -28 + ub, 2, 2, '#4a1008'); } else R(2, -28 + ub, 2, 1, mo);
         P(1, -29 + ub, '#e8a07a');

@@ -10,6 +10,7 @@ const Audio8 = (() => {
   try { enabled = localStorage.getItem('zack-sound') !== 'off'; } catch (e) { /* egal */ }
   let track = null, trackName = null, nextTime = 0, pos = 0, timer = null;
   let echoIn = null, echoDly = null;
+  let melPan = null, arpPan = null, padPan = null;   // dezente Stereo-Aufteilung der Musik
 
   const NOTE = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
   function freq(n) {
@@ -125,6 +126,10 @@ const Audio8 = (() => {
     swamp: { key: 'D4', mode: 'minor', bpm: 160, wave: 'triangle', bass: 'long', arp: 'sparse', pad: true,
       prog: [1, 6, 4, 5, 1, 6, 3, 5, 4, 1, 6, 7, 4, 6, 5, 1],
       mel: "3:3 5 1:2 -:2|6:3 5 3:2 -:2|4:3 6 4:2 -:2|5:2 7 5 3:2 5:2|1':3 5 3:2 -:2|6:2 1' 6 3':2 1':2|3:3 5 7:2 5:2|5:4 7 5 3:2|4:3 6 1':2 6:2|3:2 5 3 1:2 -:2|6:3 1' 6:2 4:2|7:3 2' 7:2 5:2|4:2 6 4 1':2 6:2|6:3 4 3:2 5:2|5:2 7 5 3:2 -:2|1:5 -:3" },
+    // Turmtor: dunkles Dröhnen, düster und langsam
+    gate: { key: 'E4', mode: 'harm', bpm: 150, wave: 'triangle', bass: 'drone', arp: 'sparse', pad: true,
+      prog: [1, 1, 6, 5, 1, 1, 4, 5, 6, 6, 4, 3, 5, 5, 1, 1],
+      mel: "1:6 -:2|3:4 -:4|6:3 5:3 -:2|5:2 4:2 3:4|1:6 -:2|7,:4 -:4|4:4 -:4|5:4 -:4|6:6 -:2|1':4 6:4|4:4 -:4|3:4 -:4|5:3 4:3 -:2|2:2 3:2 4:4|1:8|-:8" },
     // Turm: dunkel, bedrohlich
     tower: { key: 'C5', mode: 'harm', bpm: 200, wave: 'sawtooth', bass: 'pump', arp: 'rise', pad: true,
       prog: [1, 4, 5, 1, 6, 4, 5, 1, 4, 1, 6, 5, 4, 6, 5, 1],
@@ -144,11 +149,22 @@ const Audio8 = (() => {
       master = ac.createGain(); master.gain.value = enabled ? 0.5 : 0; master.connect(ac.destination);
       musGain = ac.createGain(); musGain.gain.value = 0.18; musGain.connect(master);
       sfxGain = ac.createGain(); sfxGain.gain.value = 0.5; sfxGain.connect(master);
+      // dezente Stereo-Aufteilung: Melodie leicht rechts, Arpeggio links, Pad links außen
+      const chanPan = (v) => {
+        try {
+          if (!ac.createStereoPanner) return null;
+          const p = ac.createStereoPanner();
+          if (p.pan) p.pan.value = v;
+          p.connect(master);
+          return p;
+        } catch (e) { return null; }
+      };
+      melPan = chanPan(0.22); arpPan = chanPan(-0.3); padPan = chanPan(-0.12);
       // weiches Echo (punktierte Achtel) für die Melodie
       echoIn = ac.createGain(); echoIn.gain.value = 0.3;
       echoDly = ac.createDelay(2); echoDly.delayTime.value = 0.36;
       const fb = ac.createGain(); fb.gain.value = 0.3;
-      echoIn.connect(echoDly); echoDly.connect(fb); fb.connect(echoDly); echoDly.connect(musGain);
+      echoIn.connect(echoDly); echoDly.connect(fb); fb.connect(echoDly); echoDly.connect(melPan || musGain);
     } catch (e) { ac = null; }
     // Die Titelmusik wurde schon vor dem ersten Klick „gewählt“ – jetzt, wo der AudioContext
     // existiert (Browser erlauben Ton erst nach einer Geste), muss der Sequencer wirklich starten.
@@ -190,10 +206,10 @@ const Audio8 = (() => {
   // Sequencer: plant immer ~0.3 s im Voraus, in Sechzehnteln (halbe Achtel)
   function playEv(e, t, eighth, tr) {
     switch (e.v) {
-      case 'L': tone(t, e.f, Math.max(0.06, e.len * eighth * 0.96), tr.wave, 0.2 * tr.wf, musGain, null, 0.012, true); break;
-      case 'A': tone(t, e.f, eighth * 0.85, tr.o.pad ? 'sine' : 'square', tr.o.pad ? 0.1 : 0.05, musGain); break;
+      case 'L': tone(t, e.f, Math.max(0.06, e.len * eighth * 0.96), tr.wave, 0.2 * tr.wf, melPan || musGain, null, 0.012, true); break;
+      case 'A': tone(t, e.f, eighth * 0.85, tr.o.pad ? 'sine' : 'square', tr.o.pad ? 0.1 : 0.05, arpPan || musGain); break;
       case 'B': tone(t, e.f, e.len * eighth * 0.92, 'triangle', 0.34, musGain); break;
-      case 'P': tone(t, e.f, e.len * eighth * 1.05, 'sine', 0.045, musGain, null, 0.45); break;
+      case 'P': tone(t, e.f, e.len * eighth * 1.05, 'sine', 0.045, padPan || musGain, null, 0.45); break;
       case 'K': tone(t, 120, 0.13, 'triangle', 0.28, musGain, 45); break;
       case 'S': noise(t, 0.09, 0.13, 3600, musGain); break;
       case 'H': noise(t, 0.03, 0.045, 8000, musGain); break;
@@ -237,6 +253,7 @@ const Audio8 = (() => {
     thud(t) { tone(t, 120, 0.25, 'triangle', 0.4, null, 50); noise(t, 0.15, 0.3, 300); },
     creak(t) { tone(t, 220, 0.5, 'sawtooth', 0.08, null, 160); },
     poof(t) { noise(t, 0.7, 0.6, 2000); tone(t, 800, 0.6, 'sine', 0.15, null, 200); },
+    thunder(t) { noise(t, 1.5, 0.55, 240); noise(t + 0.18, 1.3, 0.4, 130); tone(t, 95, 1.4, 'sine', 0.3, null, 38); tone(t + 0.1, 70, 1.6, 'triangle', 0.18, null, 34); },
     fanfare(t) { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(t + i * 0.12, f, i === 5 ? 0.6 : 0.14, 'square', 0.18)); },
     blip(t) { tone(t, 880, 0.04, 'square', 0.08); },
   };

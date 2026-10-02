@@ -147,11 +147,30 @@ ROOMS.attic = {
       const y = 26 + ((i * 11 + Math.floor(t * 120)) % 20);
       if ((x - 160) ** 2 + (y - 36) ** 2 < 120) fr(ctx, x, y, 1, 2, '#8aa0c0');
     }
+    // Blitz: alle 14 s blitzt es kurz auf (Doppelblitz), Donner folgt im update-Hook
+    const ph = t % 14;
+    if (ph < 0.1 || (ph >= 0.16 && ph < 0.24)) {
+      ctx.globalAlpha = 0.85;
+      for (let y = -12; y <= 12; y++) {
+        const hw = Math.round(13 * Math.sqrt(Math.max(0, 1 - (y * y) / 169)));
+        fr(ctx, 160 - hw, 36 + y, hw * 2, 1, '#dce8ff');
+      }
+      ctx.globalAlpha = 0.07;
+      ctx.fillStyle = '#c8d8ff';
+      ctx.fillRect(0, 0, W, SCENE_H);
+      ctx.globalAlpha = 1;
+    }
     // Staub im Licht
     for (let i = 0; i < 12; i++) {
       const x = 140 + ((i * 37 + t * 3 * (1 + i % 3)) % 60);
       const y = 60 + ((i * 23 + t * 2) % 60) + Math.sin(t + i) * 3;
       if (i % 2 === Math.floor(t * 2 + i) % 2) fr(ctx, x, y, 1, 1, '#e8d8b0');
+    }
+  },
+  update(dt, t) {
+    // Donner passend zum Blitz (Blitz bei t % 14 == 0, Schall kommt später)
+    if (Math.floor(t / 14) !== Math.floor((t - dt) / 14)) {
+      setTimeout(() => Audio8.sfx('thunder'), 900);
     }
   },
   objects: [
@@ -383,6 +402,12 @@ ROOMS.clearing = {
     const vx = -6 + ph * 330, vy = 12 + Math.sin(ph * 5) * 3;
     const vdy = Math.floor(t * 7) % 2 ? 1 : 0;
     fr(ctx, vx, vy, 1, 1, '#243050'); fr(ctx, vx - 1, vy - vdy, 1, 1, '#243050'); fr(ctx, vx + 1, vy - vdy, 1, 1, '#243050');
+    // Blatt fällt gelegentlich von der Eiche
+    const lp = (t * 0.09) % 1;
+    const lx = 30 + Math.sin(lp * 9) * 13 + lp * 26, ly = 58 + lp * 66;
+    const lt = Math.floor(t * 3) % 2;
+    fr(ctx, lx, ly, 2, 1, lt ? '#7aa04a' : '#a08030');
+    fr(ctx, lx + (lt ? 2 : -1), ly + 1, 1, 1, lt ? '#a08030' : '#7aa04a');
   },
   before() {
     if (!flag('landed')) E.zack.visible = false;

@@ -578,7 +578,7 @@ async function talkFrog() {
 // TURMTOR
 // ======================================================================
 ROOMS.towergate = {
-  name: 'Turmtor', music: 'tower',
+  name: 'Turmtor', music: 'gate',
   walk: [[0, 116], [320, 112], [320, 135], [0, 135]],
   scale: [100, 0.86, 134, 1],
   bgKey: () => (flag('colorRestored') ? 'c' : 'g'),
@@ -615,7 +615,40 @@ ROOMS.towergate = {
     p.rect(272, 98, 2, 16, '#4a3018'); p.line(273, 99, 320, 86, '#a08a5a');
     // tote Büsche
     for (const [x, y] of [[30, 112], [92, 118], [256, 126]]) { p.line(x, y, x - 6, y - 10, '#4a3a2a'); p.line(x, y, x + 4, y - 12, '#4a3a2a'); p.line(x, y, x + 8, y - 6, '#4a3a2a'); }
+    // Feuerschalen neben dem Tor (Flammen laufen animiert im back-Hook, bleiben auch im grauen Fabulien warm)
+    for (const bx of [158, 228]) {
+      p.rect(bx - 6, 90, 12, 2, '#4a4a52'); p.rect(bx - 5, 92, 10, 3, '#3a3a40'); p.rect(bx - 4, 95, 8, 4, '#2a2a30');
+      p.line(bx - 1, 99, bx - 1, 105, '#3a3a40'); p.line(bx + 1, 99, bx + 1, 105, '#3a3a40');
+      p.rect(bx - 4, 92, 10, 1, '#5a5a62');
+    }
     if (!flag('colorRestored')) p.gray(true);
+  },
+  back(ctx, t) {
+    // Flammen in den Feuerschalen
+    for (const bx of [158, 228]) {
+      for (let i = 0; i < 4; i++) {
+        const h = 4 + Math.abs(Math.sin(t * 10 + i * 1.9 + bx * 0.1)) * 8;
+        fr(ctx, bx - 3 + i * 2, 92 - h, 2, h, i % 3 ? '#f08020' : '#f0d040');
+      }
+      // einzelner Glutfunken über der Schale
+      fr(ctx, bx - 1 + Math.round(Math.sin(t * 3 + bx) * 2), 78 + Math.sin(t * 2.2 + bx) * 3, 1, 1, '#ffd870');
+    }
+    // Funken steigen auf
+    for (let i = 0; i < 3; i++) {
+      const k = (t * 0.5 + i * 0.33) % 1;
+      const sx = 158 + (i % 2) * 70 + Math.sin(t * 3 + i) * 3;
+      ctx.globalAlpha = 1 - k;
+      fr(ctx, sx, 88 - k * 16, 1, 1, '#ffc860');
+      ctx.globalAlpha = 1;
+    }
+  },
+  front(ctx, t) {
+    // warmes Flackern der Feuerschalen über Tor und Weg
+    const a = 0.14 + Math.sin(t * 8) * 0.05 + Math.sin(t * 15 + 2) * 0.03;
+    ctx.globalAlpha = Math.max(0.05, a);
+    ctx.drawImage(glowCanvas('#ffb050', 24), 128, 62, 60, 52);
+    ctx.drawImage(glowCanvas('#ffb050', 24), 198, 62, 60, 52);
+    ctx.globalAlpha = 1;
   },
   objects: [
     {
