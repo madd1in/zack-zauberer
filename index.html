@@ -48,13 +48,16 @@
   body.touch #bar button { font-size: 22px; min-height: 42px; padding: 2px 14px; }
   #toast { position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 9; max-width: 90vw; text-align: center; background: var(--btn); border: 1px solid #8c5cb4; padding: 4px 14px; font-size: 20px; opacity: 0; transition: opacity .25s; pointer-events: none; }
   #toast.show { opacity: 1; }
-  #help, #tip, #tts { position: fixed; inset: 0; z-index: 8; display: none; align-items: center; justify-content: center; background: rgba(4,2,10,.85); padding: 16px; overflow: auto; }
-  #help.show, #tip.show, #tts.show { display: flex; }
+  #help, #tip, #tts, #log { position: fixed; inset: 0; z-index: 8; display: none; align-items: center; justify-content: center; background: rgba(4,2,10,.85); padding: 16px; overflow: auto; }
+  #help.show, #tip.show, #tts.show, #log.show { display: flex; }
   @media (prefers-reduced-motion: reduce) { #toast, #bar { transition: none; } }
-  #help > div, #tipBody, #tts > div { max-width: 560px; max-height: 100%; overflow: auto; background: var(--panel); border: 2px solid var(--edge); padding: 16px 20px; font-size: 20px; line-height: 1.15; }
-  #help h2, #tipBody h2, #tts h2 { margin: 0 0 8px; color: var(--gold); font-weight: normal; font-size: 30px; }
-  #help b, #tipBody b, #tts b { color: #80e0f0; font-weight: normal; }
-  #help p, #tipBody p, #tts p { margin: 6px 0; }
+  #help > div, #tipBody, #tts > div, #log > div { max-width: 560px; max-height: 100%; overflow: auto; background: var(--panel); border: 2px solid var(--edge); padding: 16px 20px; font-size: 20px; line-height: 1.15; }
+  #help h2, #tipBody h2, #tts h2, #log h2 { margin: 0 0 8px; color: var(--gold); font-weight: normal; font-size: 30px; }
+  #help b, #tipBody b, #tts b, #log b { color: #80e0f0; font-weight: normal; }
+  #help p, #tipBody p, #tts p, #log p { margin: 6px 0; }
+  #logBody { max-height: 60vh; overflow: auto; }
+  /* Foto-Modus (Taste P): alles Überlagerte ausblenden */
+  body.photo #bar, body.photo #menu, body.photo #quick, body.photo #toast { display: none !important; }
   #tipBody { min-width: min(520px, 90vw); }
   #tipBody .muted { color: var(--muted); }
   #tipBody .goal b { color: var(--gold); }
@@ -88,6 +91,7 @@
 <button id="menu" aria-label="Menü" aria-expanded="false">☰</button>
 <div id="bar" class="hide">
   <button id="btnTip" title="Zacks Notizbuch: Was tun als Nächstes? (Taste T)">Tipp</button>
+  <button id="btnLog" title="Zuletzt Gesagtes nachlesen">Log</button>
   <button id="btnSave">Speichern</button>
   <button id="btnLoad">Laden</button>
   <button id="btnNew">Neustart</button>
@@ -104,6 +108,11 @@
 </div>
 <div id="rotate"><div class="ico" aria-hidden="true">▯</div><div>Bitte das Gerät quer halten,<br>dann ist das Spiel groß genug.</div><button id="btnRotOk">Trotzdem im Hochformat spielen</button></div>
 <div id="tip" role="dialog" aria-label="Zacks Notizbuch"><div id="tipBody"></div></div>
+<div id="log" role="dialog" aria-label="Zuletzt Gesagtes"><div>
+  <h2>Gesagtes</h2>
+  <div id="logBody"></div>
+  <p class="muted" style="text-align:center;color:var(--muted)">(Klicken zum Schließen)</p>
+</div></div>
 <div id="tts" role="dialog" aria-label="Sprachausgabe einrichten"><div>
   <h2>🗣 Sprachausgabe</h2>
   <p class="muted">Zack und alle Figuren sprechen ihre Texte mit echter Stimme (ElevenLabs).</p>
@@ -122,7 +131,7 @@
   <p><b>Rechtsklick</b> auf ein Objekt schaut es direkt an.</p>
   <p><b>Leertaste / Klick</b> überspringt Sprechtexte.</p>
   <p><b>Nicht weiter?</b> Taste <b>T</b> oder der Knopf „Tipp“ öffnet Zacks Notizbuch: Es sagt dir, was als Nächstes dran ist, auf Wunsch Schritt für Schritt deutlicher.</p>
-  <p><b>Tasten:</b> 1–9 wählen das Verb (im Gespräch: die Antwort), <b>H</b> gedrückt halten zeigt alle anklickbaren Dinge, Esc schließt Fenster.</p>
+  <p><b>Tasten:</b> 1–9 wählen das Verb (im Gespräch: die Antwort), <b>H</b> gedrückt halten zeigt alle anklickbaren Dinge, <b>P</b> = Foto-Modus (blendet alles Überlagerte aus), Esc schließt Fenster.</p>
   <p><b>Touch:</b> Antippen = Aktion, <b>lange drücken</b> = Anschauen. Unten links gibt es Schnellknöpfe: <b>👁</b> schaltet den Anschauen-Modus ein (dann wirkt einfaches Antippen wie langes Drücken), <b>◎</b> zeigt alle anklickbaren Dinge. Mit ☰ (oben rechts) erreichst du das Menü.</p>
   <p><b>🗣 Sprache:</b> Im Menü unter „Sprache“ kannst du ElevenLabs-Sprachausgabe aktivieren – dann lesen echte Stimmen alle Dialoge vor. Läuft komplett im Browser, Schlüssel wird nur lokal gespeichert.</p>
   <p><b>Vollbild</b> startet beim ersten Klick von selbst (Taste F, Knopf „Vollbild“ oder Esc beendet es). Auf dem iPhone: Teilen → „Zum Home-Bildschirm“.</p>

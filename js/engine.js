@@ -39,6 +39,8 @@ const E = {
   slop: 0,                  // Touch-Toleranz beim Treffen kleiner Objekte (logische Pixel)
   touchy: false,            // letzte Eingabe kam per Touch/Stift
   taps: [],                 // Tipp-Wellen (Touch-Feedback)
+  log: [],                  // zuletzt Gesagtes (fürs Nachlesen im „Log“-Dialog)
+  stats: { t0: 0, looks: 0, tips: 0 },   // kleine Abspann-Statistik
 };
 
 let S, sx, V, vx;
@@ -184,7 +186,9 @@ function updateZack(dt) {
     if (z.resolve) { const r = z.resolve; z.resolve = null; r(true); }
   } else {
     z.x += dx / d * sp; z.y += (dy / d * sp) / 1.7;
+    const fr = Math.floor(z.animT / 0.12);
     z.animT += dt;
+    if (Math.floor(z.animT / 0.12) !== fr) Audio8.sfx('step');   // leise Schritte im Gehrhythmus
     z.dustT = (z.dustT || 0) + dt;
     if (z.dustT > 0.17 && E.particles.length < 160) {      // kleine Staubwölkchen unter den Füßen
       z.dustT = 0;
@@ -219,6 +223,10 @@ function speak(who, text, ms) {
       text, info, until: E.t + dur / 1000,
       resolve: () => { if (E.speech && E.speech.text === text) { E.speech = null; E.talking = null; } res(); },
     };
+    // fürs „Log“-Dialog: Anzeigename jetzt auflösen (der Raum kann später wechseln)
+    const nm = info.id === 'zack' ? 'Zack' : info.id === 'narrator' ? 'Erzähler' : info.id === 'oma' ? 'Oma' : (objById(info.id) && objById(info.id).name) || info.id;
+    E.log.push({ who: nm, text });
+    if (E.log.length > 40) E.log.shift();
     // Optional: Zeile per ElevenLabs-Stimme sprechen (Blasendauer folgt dem Audio)
     if (typeof TTS !== 'undefined' && TTS.enabled()) TTS.speak(info.id, text, E.speech);
   });
@@ -278,11 +286,17 @@ function roomBg(room) {
   }
   return room._bg;
 }
+// Generierte Raum-Klänge (Regen, Wind, Gemurmel, Blubbern, Vögel) – siehe audio.js
+const AMBIENCE = {
+  attic: 'rain', clearing: 'birds', village: 'birds', tavern: 'murmur',
+  swamp: 'bubbles', towergate: 'wind', tower: 'wind',
+};
 function setRoom(id) {
   E.room = ROOMS[id]; E.roomId = id;
   E.hover = null;
   roomBg(E.room);
   Audio8.music(E.room.music || null);
+  Audio8.ambience(AMBIENCE[id] || null);
 }
 async function goRoom(id, x, y, dir, opts) {
   opts = opts || {};
@@ -327,6 +341,7 @@ function walkPoint(o) {
 async function runHandler(verb, o, item) {
   const h = o.on && o.on[verb];
   let r;
+  if (verb === 'look') E.stats.looks++;
   if (h) r = await h(item || null);
   if (!h || r === false) await defaultResponse(verb, o, item);
 }
@@ -361,6 +376,7 @@ async function invAction(verb, id) {
   stopWalk();
   E.busy = true;
   try {
+    if (verb === 'look') E.stats.looks++;
     if (verb === 'look' || verb === 'walk') await (it.look ? it.look() : say('Das ist ' + it.name + '.'));
     else if (verb === 'take') await say(pick(['Hab ich doch schon.', 'Ist schon in meiner Tasche.']));
     else if (it[verb]) { const r = await it[verb](); if (r === false) await defaultResponse(verb, null, null); }
@@ -904,6 +920,14 @@ function startEngine() {
   V.addEventListener('pointercancel', cancelPress);
   window.addEventListener('pointermove', onPressMove);
   window.addEventListener('keydown', e => {
+    // Tippfelder (Sprache-Dialog) dürfen Tasten wie 5/P ungestört nutzen
+    const tg = e.target;
+    if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'SELECT' || tg.tagName === 'TEXTAREA')) return;
+    if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      document.body.classList.toggle('photo');
+      if (typeof toast === 'function' && document.body.classList.contains('photo')) toast('Foto-Modus: P beendet ihn.');
+      return;
+    }
     if (e.key === 'Escape' || e.key === ' ' || e.key === '.' || e.key === 'Enter') {
       if (E.mode === 'card' && E.card) E.card.resolve();
       else if (E.speech) skipSpeech();

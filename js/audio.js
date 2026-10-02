@@ -11,6 +11,61 @@ const Audio8 = (() => {
   let track = null, trackName = null, nextTime = 0, pos = 0, timer = null;
   let echoIn = null, echoDly = null;
   let melPan = null, arpPan = null, padPan = null;   // dezente Stereo-Aufteilung der Musik
+  let ambName = null, ambNodes = null, ambTimer = null, ambGain = null;
+
+  // ------------------------------------------------ Ambiente je Raum (generiert)
+  function stopAmb() {
+    if (ambTimer) { clearInterval(ambTimer); ambTimer = null; }
+    if (ambNodes) {
+      for (const n of ambNodes) { try { if (n.stop) n.stop(); } catch (e) { /* egal */ } try { n.disconnect(); } catch (e) { /* egal */ } }
+      ambNodes = null;
+    }
+  }
+  // Gelooppter Rausch-Puffer (braun-ish) über Filter; lfo = [Rate, Hub] moduliert die Filterfrequenz
+  function noiseLoop(type, freq, vol, lfo) {
+    const src = ac.createBufferSource();
+    const len = Math.floor(ac.sampleRate * 2);
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+    src.buffer = buf; src.loop = true;
+    const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+    if (lfo) {
+      const lo = ac.createOscillator(), lg = ac.createGain();
+      lo.frequency.value = lfo[0]; lg.gain.value = lfo[1];
+      lo.connect(lg); lg.connect(f.frequency); lo.start();
+      ambNodes.push(lo);
+    }
+    const g = ac.createGain(); g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(ambGain);
+    src.start();
+    ambNodes.push(src);
+  }
+  function ambience(name) {
+    ambName = name;
+    if (!ac) return;
+    stopAmb();
+    if (!name || !enabled) return;
+    ambNodes = [];
+    if (!ambGain) { ambGain = ac.createGain(); ambGain.gain.value = 1; ambGain.connect(master); }
+    switch (name) {
+      case 'rain': noiseLoop('lowpass', 950, 0.055); break;                       // Dachboden: Dauerregen
+      case 'wind': noiseLoop('bandpass', 420, 0.045, [0.13, 190]); break;         // Turm/Tor: Heulen
+      case 'murmur':                                                              // Taverne: Gemurmel + Klirren
+        noiseLoop('lowpass', 480, 0.04, [0.7, 120]);
+        ambTimer = setInterval(() => { if (enabled) sfx('clink'); }, 5000 + Math.random() * 4000);
+        break;
+      case 'bubbles':                                                             // Sumpf: dumpfes Blubbern
+        noiseLoop('lowpass', 240, 0.045);
+        ambTimer = setInterval(() => { if (enabled) sfx('bubble2'); }, 2500 + Math.random() * 3500);
+        break;
+      case 'birds':                                                               // Lichtung/Dorf: Luft + Zwitschern
+        noiseLoop('highpass', 2600, 0.012, [0.09, 800]);
+        ambTimer = setInterval(() => { if (enabled && Math.random() < 0.8) sfx('chirp'); }, 3500 + Math.random() * 4000);
+        break;
+    }
+  }
 
   const NOTE = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
   function freq(n) {
@@ -169,6 +224,7 @@ const Audio8 = (() => {
     // Die Titelmusik wurde schon vor dem ersten Klick „gewählt“ – jetzt, wo der AudioContext
     // existiert (Browser erlauben Ton erst nach einer Geste), muss der Sequencer wirklich starten.
     if (ac && track) { pos = 0; nextTime = ac.currentTime + 0.1; setEcho(); if (!timer) timer = setInterval(schedule, 80); }
+    if (ac && ambName && enabled) ambience(ambName);   // ebenso das Raum-Ambiente
   }
   // Tab im Hintergrund: Ton anhalten, beim Zurückkehren sauber weiterlaufen
   function setHidden(hidden) {
@@ -254,6 +310,10 @@ const Audio8 = (() => {
     creak(t) { tone(t, 220, 0.5, 'sawtooth', 0.08, null, 160); },
     poof(t) { noise(t, 0.7, 0.6, 2000); tone(t, 800, 0.6, 'sine', 0.15, null, 200); },
     thunder(t) { noise(t, 1.5, 0.55, 240); noise(t + 0.18, 1.3, 0.4, 130); tone(t, 95, 1.4, 'sine', 0.3, null, 38); tone(t + 0.1, 70, 1.6, 'triangle', 0.18, null, 34); },
+    step(t) { noise(t, 0.035, 0.05, 550 + Math.random() * 250); },
+    chirp(t) { const b = 2400 + Math.random() * 1200; for (let i = 0; i < 3; i++) tone(t + i * 0.07, b - i * 260 - Math.random() * 120, 0.06, 'sine', 0.028); },
+    clink(t) { tone(t, 1500 + Math.random() * 700, 0.05, 'triangle', 0.03); },
+    bubble2(t) { tone(t, 160 + Math.random() * 120, 0.16, 'sine', 0.05, null, 420); },
     fanfare(t) { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(t + i * 0.12, f, i === 5 ? 0.6 : 0.14, 'square', 0.18)); },
     blip(t) { tone(t, 880, 0.04, 'square', 0.08); },
   };
@@ -267,9 +327,13 @@ const Audio8 = (() => {
     enabled = on;
     try { localStorage.setItem('zack-sound', on ? 'on' : 'off'); } catch (e) { /* egal */ }
     if (master) master.gain.value = on ? 0.5 : 0;
+    if (on) { if (ambName) ambience(ambName); } else stopAmb();
   }
-  // Musik leiser, während eine Stimme (TTS) spricht
-  function duck(on) { if (musGain && enabled) musGain.gain.value = on ? 0.06 : 0.18; }
+  // Musik/Ambiente leiser, während eine Stimme (TTS) spricht
+  function duck(on) {
+    if (musGain && enabled) musGain.gain.value = on ? 0.06 : 0.18;
+    if (ambGain) ambGain.gain.value = on ? 0.35 : 1;
+  }
 
-  return { init, music, sfx, setEnabled, setHidden, duck, tracks: SONGS, get enabled() { return enabled; } };
+  return { init, music, ambience, sfx, setEnabled, setHidden, duck, tracks: SONGS, get enabled() { return enabled; } };
 })();

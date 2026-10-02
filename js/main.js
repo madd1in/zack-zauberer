@@ -6,6 +6,8 @@
 function resetState() {
   E.inv = ['handy']; E.invScroll = 0;
   E.flags = {};
+  E.stats = { t0: (E.stats && E.stats.t0) || Date.now(), looks: 0, tips: 0 };
+  E.log = [];
   E.zack.hat = false; E.zack.visible = true;
   E.verb = 'walk'; E.pending = null; E.dialog = null; E.speech = null; E.talking = null;
   E.busy = false; E.particles = []; E.overlay = null; E.fade = 0; E.hint = false; E.hintUntil = 0; E.eye = false;
@@ -137,6 +139,8 @@ window.drawEndText = () => {
     ['', '', 6],
     ['Danke fürs Spielen!', '#80e0f0', 12],
   ];
+  const mins = E.stats && E.stats.t0 ? Math.max(1, Math.round((Date.now() - E.stats.t0) / 60000)) : 0;
+  if (mins) lines.push(['', '', 6], [`Spielerzeit ${mins} Min · ${E.stats.looks || 0}× angeschaut · ${E.stats.tips || 0} Tipps aufgedeckt`, '#8a7aa8', 10]);
   let y = 18;
   lines.forEach(([s, c, sz], i) => {
     if (k > i * 0.5 && s) text(s, 160, y, c, { align: 'center', size: sz });
@@ -150,6 +154,7 @@ window.endClick = () => {
   E.room = null;
   E.mode = 'title';
   Audio8.music('title');
+  Audio8.ambience(null);
 };
 
 // ---------------- Menüleiste ----------------
@@ -207,6 +212,22 @@ function setupBar() {
   if (btnTip) btnTip.onclick = () => { if (!openTip()) toast('Das Notizbuch gibt es im Spiel.'); };
   const tipEl = document.getElementById('tip');
   if (tipEl) tipEl.onclick = (e) => { if (e.target === tipEl) closeTip(); };
+  // Log: zuletzt Gesagtes nachlesen
+  const logEl = document.getElementById('log');
+  const btnLog = document.getElementById('btnLog');
+  if (logEl && btnLog) {
+    const closeLog = () => logEl.classList.remove('show');
+    btnLog.onclick = () => {
+      const box = document.getElementById('logBody'); if (!box) return;
+      box.innerHTML = E.log.length
+        ? E.log.map(l => '<p><b>' + esc(l.who) + ':</b> ' + esc(l.text) + '</p>').join('')
+        : '<p class="muted">Noch wurde nichts gesagt.</p>';
+      logEl.classList.add('show');
+      try { box.scrollTop = box.scrollHeight; } catch (e) { /* egal */ }
+    };
+    logEl.onclick = (e) => { if (e.target === logEl) closeLog(); };
+    window.addEventListener('keydown', e => { if (e.key === 'Escape') closeLog(); });
+  }
 }
 
 // ---------------- Vollbild, Menü, Touch ----------------

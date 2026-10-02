@@ -114,6 +114,7 @@ const Guide = {
   reveal() {                      // nächste Stufe aufdecken
     const s = this.current(); if (!s) return 0;
     this.levels[s.id] = Math.min(3, this.level(s) + 1);
+    if (E.stats) E.stats.tips++;
     return this.levels[s.id];
   },
   reset() { this.levels = {}; this.open = false; this._sig = ''; this._since = 0; this._nudged = ''; },

@@ -11,7 +11,8 @@ Der 13-jährige Zack wird auf Omas Dachboden von einem Zauberbuch nach Fabulien 
 - Klassisches Verben-Interface (Gehe zu, Schau an, Nimm, Benutze, Rede mit, Gib …), Inventar und „Benutze X mit Y“
 - 8 Räume, 10 Figuren mit Dialogbäumen, eine durchgehende Rätselkette
 - Prozedural erzeugte VGA-Pixelgrafik (320×200) mit lebendiger Lichtstimmung: Kamin-Flackern, Kesselglühen, Feuerschalen, Blitz und Donner, weiche Schatten
-- Chiptune-Musik (11 Stücke, dezente Stereo-Aufteilung) und Soundeffekte per WebAudio
+- Chiptune-Musik (11 Stücke, dezente Stereo-Aufteilung), generierte Raum-Klänge (Regen, Wind, Gemurmel, Blubbern, Vogelzwitschern), Schritte und Soundeffekte per WebAudio
+- Sprech-Log (alles Gesagte nachlesen), Foto-Modus (Taste P) und kleine Statistik im Abspann
 - **Sprachausgabe über ElevenLabs** (optional): echte Stimmen lesen alle Dialoge vor, Schlüssel bleibt lokal im Browser
 - **PWA**: installierbar („Zum Home-Bildschirm“), startet im Vollbild und funktioniert offline
 - Speichern/Laden, automatisches Speichern bei jedem Raumwechsel

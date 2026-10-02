@@ -2,7 +2,7 @@
 // Service Worker: macht das Spiel offline verfügbar (PWA).
 // Strategie: Netzwerk zuerst (Updates sofort wirksam), Cache als Offline-Fallback.
 // Bei jedem Release VER erhöhen, damit alte Caches aufgeräumt werden.
-const VER = 'zack-v2';
+const VER = 'zack-v3';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png',
