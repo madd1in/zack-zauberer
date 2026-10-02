@@ -210,6 +210,7 @@ ROOMS.attic = {
       id: 'pferd', name: 'Schaukelpferd', rect: [24, 72, 58, 44], walk: [92, 118], face: 'left', z: 114,
       draw(ctx, t) {
         const img = horseSprite();
+        softShadow(ctx, 52, 114, 36);
         const a = t < attic.horseRock ? Math.sin((attic.horseRock - t) * 9) * 0.14 * Math.min(1, attic.horseRock - t) : 0;
         ctx.save(); ctx.translate(52, 112); ctx.rotate(a);
         ctx.drawImage(img, -30, -42);
@@ -377,6 +378,11 @@ ROOMS.clearing = {
     const bx = 130 + Math.sin(t * 0.7) * 50, by = 70 + Math.sin(t * 1.3) * 10;
     const wf = Math.floor(t * 10) % 2;
     fr(ctx, bx, by, 1, 1, '#302010'); fr(ctx, bx - 1 - wf, by - 1, 1 + wf, 1, '#f080c0'); fr(ctx, bx + 1, by - 1, 1 + wf, 1, '#f080c0');
+    // Vogel zieht über die Lichtung
+    const ph = (t * 0.05) % 1;
+    const vx = -6 + ph * 330, vy = 12 + Math.sin(ph * 5) * 3;
+    const vdy = Math.floor(t * 7) % 2 ? 1 : 0;
+    fr(ctx, vx, vy, 1, 1, '#243050'); fr(ctx, vx - 1, vy - vdy, 1, 1, '#243050'); fr(ctx, vx + 1, vy - vdy, 1, 1, '#243050');
   },
   before() {
     if (!flag('landed')) E.zack.visible = false;
@@ -493,7 +499,7 @@ ROOMS.clearing = {
       the: 'Grimbart',
       hidden: () => flag('grimbartFree'),
       npc: { color: '#ffe060', head: [246, 66] },
-      draw(ctx) { blit(ctx, gnomeSprite(blink(3), talking('grimbart'), false), 243, 100, 12, 34); },
+      draw(ctx) { blit(ctx, gnomeSprite(blink(3), talking('grimbart'), false), 243, 100, 12, 34, 1, false, 16); },
       on: {
         look: () => say('Ein Gartenzwerg mit rotem Hut und dem grimmigsten Gesicht, das ich je an einem Gartenzwerg gesehen habe.'),
         take: async () => { await sayAs('grimbart', 'Wag es ja nicht! Ich bin kein Souvenir!'); },
@@ -511,7 +517,7 @@ ROOMS.clearing = {
       id: 'grimbart2', name: 'Grimbart', the: 'Grimbart', rect: [230, 52, 28, 70], walk: [214, 122], face: 'right', z: 122,
       hidden: () => !flag('grimbartFree'),
       npc: { color: '#ffe060', head: [246, 52] },
-      draw(ctx) { blit(ctx, wizardSprite(blink(5), talking('grimbart2'), false), 246, 122, 18, 68); },
+      draw(ctx) { blit(ctx, wizardSprite(blink(5), talking('grimbart2'), false), 246, 122, 18, 68, 1, false, 24); },
       on: {
         look: () => say('Grimbart Funkelbart in voller Größe. Mit Bart bis zum Bauchnabel.'),
         talk: () => talkWizard(),
@@ -698,6 +704,16 @@ ROOMS.village = {
       const k = (t * 0.6 + i * 0.2) % 1;
       fr(ctx, 186 + Math.sin(t + i) * 2 + k * 6, 40 - k * 30, 2, 2, k > 0.6 ? '#c8d0dc' : '#a8b0bc');
     }
+    // Vögel am Himmel
+    for (let i = 0; i < 2; i++) {
+      const ph = (t * 0.045 + i * 0.5) % 1;
+      const bx = -8 + ph * 336, by = 10 + i * 9 + Math.sin(ph * 7 + i) * 2;
+      if (by > 40) continue;
+      const dy = Math.floor(t * 6 + i) % 2 ? 1 : 0;
+      fr(ctx, bx, by, 1, 1, '#2a3448'); fr(ctx, bx - 1, by - dy, 1, 1, '#2a3448'); fr(ctx, bx + 1, by - dy, 1, 1, '#2a3448');
+    }
+    // Glitzern im Brunnenwasser
+    if (Math.floor(t * 2) % 5 === 0) fr(ctx, 154 + Math.floor(t * 3) % 12, 87, 1, 1, '#a8d8f0');
   },
   update(dt, t) {
     if (chick.fed > 0) { chick.peck = Math.floor(t * 4) % 2 === 0; return; }
@@ -759,13 +775,13 @@ ROOMS.village = {
             await say('Ich hänge den Eimer an den Haken und kurble...');
             Audio8.sfx('splash');
             await wait(600);
-            addItem('wasser');
+            addItem('wasser'); setFlag('gotWater');
             await say('Quietsch, platsch – ein Eimer voll Wunschwasser!');
             return;
           }
           if (item === 'taler') return say('Ich könnte mir was wünschen... aber den Taler brauche ich noch.');
           if (item === 'flasche') return say('Die Flasche hebe ich für was anderes auf. Ich brauche etwas Größeres zum Schöpfen.');
-          if (!item) return say(flag('gotWater') ? 'Ich hab schon genug Wasser.' : 'Da hängt kein Eimer dran. Den hat bestimmt jemand geklaut.');
+          if (!item) return say(has('wasser') ? 'Ich hab schon genug Wasser.' : flag('gotWater') ? 'Wasser hab ich schon geholt. Der Eimer ist eh weg.' : 'Da hängt kein Eimer dran. Den hat bestimmt jemand geklaut.');
           return false;
         },
         talk: async () => { await say('Hallooo!'); await wait(300); await sayAs('narrator', '...allooo... llooo... ooo...'); await say('Das Echo ist der beste Gesprächspartner hier.'); },
@@ -797,7 +813,7 @@ ROOMS.village = {
       npc: { color: '#ffffff', head: [0, 0] },
       draw(ctx, t) {
         const f = chick.run > 0 ? Math.floor(t * 12) % 2 : chick.peck ? Math.floor(t * 5) % 2 : 0;
-        blit(ctx, chickenSprite(f, 1), chick.x, chick.y, 9, 14, 1, chick.dir < 0);
+        blit(ctx, chickenSprite(f, 1), chick.x, chick.y, 9, 14, 1, chick.dir < 0, 9);
         if (chick.fed > 0) { fr(ctx, chick.x + chick.dir * 8 - 2, chick.y - 1, 5, 2, '#c8843c'); }
       },
       on: {
@@ -951,6 +967,13 @@ ROOMS.tavern = {
       fr(ctx, x, 88 - h, 2, h, i % 3 ? '#f08020' : '#f0c040');
       if (i % 2) fr(ctx, x, 88 - h * 0.5, 2, 2, '#fff0a0');
     }
+  },
+  front(ctx, t) {
+    // Flackerndes Kaminlicht über Wand und Boden (ein drawImage, gerasterte Glow-Leinwand)
+    const a = 0.17 + Math.sin(t * 7) * 0.05 + Math.sin(t * 13 + 1) * 0.03;
+    ctx.globalAlpha = Math.max(0.06, a);
+    ctx.drawImage(glowCanvas('#ffb050', 32), 127, 44, 120, 88);
+    ctx.globalAlpha = 1;
   },
   objects: [
     {

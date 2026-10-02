@@ -8,7 +8,8 @@ const Audio8 = (() => {
   let ac = null, master = null, musGain = null, sfxGain = null;
   let enabled = true;
   try { enabled = localStorage.getItem('zack-sound') !== 'off'; } catch (e) { /* egal */ }
-  let track = null, trackName = null, nextTime = 0, step = 0, timer = null;
+  let track = null, trackName = null, nextTime = 0, pos = 0, timer = null;
+  let echoIn = null, echoDly = null;
 
   const NOTE = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
   function freq(n) {
@@ -25,37 +26,116 @@ const Audio8 = (() => {
     });
   }
 
-  // Jede Spur: tempo (Achtel pro Minute), lead/bass/arp als Notenstrings
-  const TRACKS = {
-    title: { bpm: 300, wave: 'square',
-      lead: 'C5:2 E5 G5 C6:2 B5 A5 G5:2 E5 F5 G5:4 A5:2 G5 F5 E5:2 D5 E5 C5:4 -:2 E5:2 G5 A5 B5:2 C6 D6 E6:2 D6 C6 B5:2 A5 B5 G5:4 F5:2 E5 D5 C5:2 D5 E5 C5:6 -:2',
-      bass: 'C3:2 G3:2 C3:2 G3:2 F3:2 C4:2 G3:2 G2:2 F3:2 C4:2 C3:2 G3:2 G2:2 D3:2 C3:4 A2:2 E3:2 A2:2 E3:2 F3:2 C4:2 G3:2 D3:2 F3:2 A3:2 G3:2 G2:2 C3:2 G3:2 C3:4' },
-    attic: { bpm: 200, wave: 'triangle',
-      lead: 'A4:2 C5 E5 A5:3 G5 E5:2 F5:2 E5 D5 C5:4 B4:2 D5 F5 E5:3 C5 A4:2 B4:2 G#4 B4 A4:6 -:2',
-      bass: 'A2:4 E3:4 F2:4 C3:4 D3:4 E3:4 A2:4 E2:4' },
-    forest: { bpm: 260, wave: 'square',
-      lead: 'G5:2 D5 G5 B5:2 A5 G5 A5:2 F#5 D5 E5:2 F#5:2 G5:2 B5 D6 C6:2 B5 A5 B5:2 G5 E5 F#5:2 A5:2 G5:4 D5 E5 F#5 G5 A5:2 B5 A5 G5:2 E5:2 C5:2 E5 G5 B4:2 D5 G5 A5:2 F#5:2 G5:4 -:2',
-      bass: 'G2:2 D3:2 G2:2 D3:2 C3:2 G3:2 D3:2 A2:2 G2:2 D3:2 E3:2 B2:2 C3:2 D3:2 G2:4 G2:2 D3:2 E3:2 B2:2 C3:2 G3:2 G2:2 D3:2 D3:2 A2:2 G2:4' },
-    village: { bpm: 280, wave: 'square',
-      lead: 'F5 A5 C6:2 A5 F5 G5:2 A5 G5 F5 E5 F5:2 C5:2 D5 E5 F5:2 G5 A5 A#5:2 A5 G5 A5:2 F5:2 F5 A5 C6:2 D6 C6 A#5:2 A5 G5 F5 G5 A5:2 G5 F5 E5 G5 F5:4',
-      bass: 'F3:2 C3:2 F3:2 C3:2 A#2:2 F3:2 C3:2 C3:2 F3:2 C3:2 A#2:2 C3:2 F3:2 C3:2 F3:4 F3:2 C3:2 A#2:2 F3:2 C3:2 G2:2 C3:2 F2:2' },
-    tavern: { bpm: 330, wave: 'square',
-      lead: 'D5 E5 F#5 A5:2 F#5 D5:2 F#5 E5:2 C#5 A4:3 D5 E5 F#5 A5:2 B5 A5:2 F#5 E5:2 D5 D5:3 A5 B5 A5 F#5:2 D5 E5:2 F#5 G5:2 E5 C#5:3 D5 E5 F#5 E5:2 C#5 A4:2 C#5 D5:6',
-      bass: 'D3:3 A2:3 D3:3 A2:3 D3:3 A2:3 G2:3 A2:3 D3:3 A2:3 G2:3 A2:3 D3:3 A2:3 D3:6' },
-    witch: { bpm: 210, wave: 'triangle',
-      lead: 'E5 G5 B5 A#5 A5:2 G5 E5 F#5:2 D#5:2 E5:4 G5 B5 E6:2 D#6 C6 B5:2 A5 F#5 G5:2 F#5:2 E5:4 -:2',
-      bass: 'E2:2 B2:2 E2:2 B2:2 C3:2 A2:2 B2:4 E2:2 B2:2 C3:2 G2:2 A2:2 B2:2 E2:4' },
-    swamp: { bpm: 170, wave: 'triangle',
-      lead: 'D4:3 F4 A4:2 G4 F4 E4:3 D4 C#4:4 D4:3 F4 A4:2 C5 A4 A#4:3 A4 G4:2 F4 E4 D4:6 -:2',
-      bass: 'D2:4 A2:4 A#2:4 A2:4 D2:4 F2:4 G2:4 D2:4' },
-    tower: { bpm: 180, wave: 'sawtooth',
-      lead: 'C5:2 D#5 G5:2 F#5 G5:2 D#5:2 C5:2 D5:2 D#5 D5 C5 B4:4 C5:2 D#5 G5:2 G#5 G5:2 F5:2 D#5:2 D5:2 B4 D5 C5:4 -:2',
-      bass: 'C2:4 G2:4 G#2:4 G2:4 C2:4 D#2:4 F2:4 G2:4' },
-    ending: { bpm: 280, wave: 'square',
-      lead: 'C5 E5 G5 C6:3 G5 E5 F5:2 A5 C6 D6:2 C6:2 B5 G5 A5 B5 C6:2 D6 E6:2 D6 C6 B5 G5:2 C6:6 -:2',
-      bass: 'C3:2 G3:2 C3:2 E3:2 F3:2 C4:2 F3:2 A3:2 G3:2 D3:2 G3:2 B2:2 C3:2 G3:2 C3:4' },
+  // ---------------------------------------------------------------------------
+  // Komposition: Jede Spur ist ein 16-Takt-Stück (je 8 Achtel). Die Melodie steht in Tonleiter-
+  // stufen (1-7, ' = Oktave höher, , = Oktave tiefer, :n = Länge in Achteln, - = Pause), dadurch
+  // bleibt sie automatisch in der Tonart. Akkorde (prog) sind Stufen pro Takt; Arpeggio, Bass,
+  // Pad und Schlagzeug werden daraus erzeugt.
+  // ---------------------------------------------------------------------------
+  const MODES = {
+    major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10], mixo: [0, 2, 4, 5, 7, 9, 10],
+    harm: [0, 2, 3, 5, 7, 8, 11], dorian: [0, 2, 3, 5, 7, 9, 10],
   };
-  for (const k in TRACKS) { TRACKS[k].L = parse(TRACKS[k].lead); TRACKS[k].B = parse(TRACKS[k].bass); }
+  const mf = m => 440 * Math.pow(2, (m - 69) / 12);
+  function midiOf(n) { const m = n.match(/^([A-G]#?)(\d)$/); return 12 * (parseInt(m[2], 10) + 1) + NOTE[m[1]]; }
+  function degMidi(sc, tonic, d, oct, acc) {
+    const i = d - 1, o = Math.floor(i / 7), k = ((i % 7) + 7) % 7;
+    return tonic + sc[k] + 12 * (o + (oct || 0)) + (acc || 0);
+  }
+  const ARP = {
+    up: [0, 1, 2, 1, 0, 1, 2, 1], broken: [0, 2, 1, 2, 0, 2, 1, 2], rise: [0, 1, 2, 3, 2, 1, 2, 1],
+    sparse: [0, -1, 2, -1, 1, -1, 2, -1], wave: [2, 1, 0, 1, 2, 1, 0, 1], off: [],
+  };
+  // Schlagzeug je Achtel: k = Kick, s = Snare, h = Hi-Hat
+  const DRUMS = {
+    light: { k: [0, 4], h: [2, 6] },
+    beat: { k: [0, 4], s: [2, 6], h: [1, 3, 5, 7] },
+    jig: { k: [0, 6], s: [3], h: [1, 2, 4, 5, 7] },
+  };
+  function compile(o) {
+    const sc = MODES[o.mode], tonic = midiOf(o.key), bars = o.prog.length, total = bars * 8;
+    const ev = []; for (let i = 0; i < total * 2; i++) ev.push(null);
+    const put = (t, f, len, v, extra) => {
+      const k = Math.round(t * 2) % (total * 2);
+      (ev[k] = ev[k] || []).push(Object.assign({ f, len, v }, extra || {}));
+    };
+    const melBars = o.mel.split('|').map(x => x.trim());
+    o.melBars = melBars.length; o.melSums = [];
+    melBars.forEach((bar, bi) => {
+      let t = bi * 8, sum = 0;
+      for (const tok of bar.split(/\s+/)) {
+        const [nt, ln] = tok.split(':'), len = ln ? parseFloat(ln) : 1;
+        if (nt !== '-') {
+          const m = nt.match(/^([#b]?)([1-7])([',]*)$/);
+          const oct = (m[3].match(/'/g) || []).length - (m[3].match(/,/g) || []).length;
+          put(t, mf(degMidi(sc, tonic, parseInt(m[2], 10), oct, m[1] === '#' ? 1 : m[1] === 'b' ? -1 : 0)), len, 'L');
+        }
+        t += len; sum += len;
+      }
+      o.melSums.push(sum);
+    });
+    const dr = DRUMS[o.drums];
+    for (let b = 0; b < bars; b++) {
+      const r = o.prog[b], base = b * 8;
+      const ch = [0, 2, 4].map(k => degMidi(sc, tonic, r + k, -1)), root = degMidi(sc, tonic, r, -2), fifth = degMidi(sc, tonic, r + 4, -2), third = degMidi(sc, tonic, r + 2, -2);
+      const pat = ARP[o.arp || 'off'];
+      pat.forEach((ix, i) => { if (ix >= 0) put(base + i, mf(ix === 3 ? ch[0] + 12 : ch[ix]), 1, 'A'); });
+      const bs = o.bass || 'pump';
+      if (bs === 'pump') { put(base, mf(root), 2, 'B'); put(base + 2, mf(fifth), 2, 'B'); put(base + 4, mf(root), 2, 'B'); put(base + 6, mf(fifth), 2, 'B'); }
+      else if (bs === 'long') { put(base, mf(root), 4, 'B'); put(base + 4, mf(fifth), 4, 'B'); }
+      else if (bs === 'walk') { [root, third, fifth, third].forEach((m, i) => put(base + i * 2, mf(m), 2, 'B')); }
+      else if (bs === 'drone') { put(base, mf(root), 8, 'B'); }
+      if (o.pad) ch.forEach(m => put(base, mf(m), 8, 'P'));
+      if (dr) {
+        (dr.k || []).forEach(i => put(base + i, 0, 1, 'K'));
+        (dr.s || []).forEach(i => put(base + i, 0, 1, 'S'));
+        (dr.h || []).forEach(i => put(base + i, 0, 1, 'H'));
+        if (o.drums !== 'light' && b % 4 === 3) put(base + 7.5, 0, 0.5, 'S');   // kleiner Fill am Phrasenende
+      }
+    }
+    return { bpm: o.bpm, wave: o.wave, wf: o.wave === 'sawtooth' ? 0.55 : 1, ev, total, o };
+  }
+
+  const SONGS = {
+    // Heldenthema, strahlend und flott
+    title: { key: 'C5', mode: 'major', bpm: 250, wave: 'square', bass: 'pump', arp: 'up', drums: 'beat',
+      prog: [1, 5, 6, 3, 4, 1, 4, 5, 6, 3, 4, 1, 4, 5, 1, 1],
+      mel: "5:2 3 5 1':3 -|7:2 5 7 2':2 7:2|1':2 6 1' 3':3 -|5:2 7 5 3:3 -|4:2 6 1' 6 4:3|3:2 5 3 1:2 5,:2|4:2 6 1' 3':2 2':2|2':2 7 5 7:4|1':3 3' 6:2 3':2|5':2 3' 2' 3':2 7:2|6:2 1' 3' 4':2 3':2|2':2 1' 7 1':4|6:2 1' 6 4':3 -|2':2 7 5 2':2 7:2|1':3 5 3':2 1':2|1':6 -:2" },
+    // Staubiger Dachboden, neugierig und leise
+    attic: { key: 'A4', mode: 'minor', bpm: 190, wave: 'triangle', bass: 'long', arp: 'sparse', pad: true,
+      prog: [1, 6, 4, 5, 1, 6, 3, 5, 4, 1, 6, 5, 4, 6, 5, 1],
+      mel: "3:2 5 3 1:2 3:2|1:2 3 6 3:2 1:2|4:2 6 1' 6:2 4:2|5:2 7 2' 7:2 5:2|5:2 3 1 3:2 5:2|6:2 3 1 3:2 6:2|7:2 5 3 5:2 7:2|5:3 7 5:2 3:2|6:2 4 6 1':3 -|1':2 3' 1' 6:2 5:2|6:3 3' 1':2 6:2|5:2 7 5 2':4|4:2 6 4 1:3 -|1:2 3 6 3:2 1:2|7:2 5 7 5:2 3:2|1:6 -:2" },
+    // Lichtung: sonniger Waldweg
+    forest: { key: 'G4', mode: 'major', bpm: 240, wave: 'square', bass: 'walk', arp: 'broken', drums: 'light',
+      prog: [1, 5, 6, 4, 1, 5, 4, 1, 6, 3, 4, 5, 1, 4, 5, 1],
+      mel: "5:2 3 5 1':3 -|7:2 5 7 2':2 7:2|6:2 1' 6 3':2 1':2|4:2 6 4 1':3 -|3:2 5 1' 5:2 3:2|5:2 7 2' 7:2 5:2|6:2 4 6 1':2 6:2|5:3 3 1:4|6:2 7 1' 3':3 -|5:2 7 5 3:3 -|6:2 4 6 1':2 3':2|2':3 7 5:2 7:2|1':2 5 3 5:2 1':2|1':2 6 4 6:2 1':2|7:2 5 7 2':2 5:2|1':6 -:2" },
+    // Dorfplatz: hüpfender Markt
+    village: { key: 'F4', mode: 'major', bpm: 270, wave: 'square', bass: 'pump', arp: 'up', drums: 'beat',
+      prog: [1, 4, 5, 1, 6, 4, 5, 1, 1, 3, 4, 5, 6, 4, 5, 1],
+      mel: "5 3 5 1':2 5 3:2|4 6 1' 6 4:2 6:2|5 7 2' 7 5:2 7:2|1':3 5 3:2 1:2|6 1' 3' 1' 6:2 1':2|4 6 1' 6 4:2 -:2|5 7 2' 7 2':2 5:2|3:2 1 3 5:2 1':2|1':2 5 3 5:2 1':2|3 5 7 5 3:2 5:2|4 6 1' 6 2':2 1':2|5 7 2' 7 5:2 7:2|6 1' 3' 1' 6:2 3:2|4 6 1' 6 4:2 6:2|7:2 2' 7 5:2 7:2|1':6 -:2" },
+    // Taverne: Fiedel-Jig, 3+3+2
+    tavern: { key: 'D5', mode: 'mixo', bpm: 330, wave: 'square', bass: 'pump', arp: 'sparse', drums: 'jig',
+      prog: [1, 7, 4, 1, 1, 7, 4, 1, 6, 4, 1, 7, 4, 7, 1, 1],
+      mel: "1 3 5 5 3 1 3:2|7, 2 4 4 2 7, 2:2|4 6 4 6 4 2 4:2|5 3 1 3 5 3 1:2|1 3 5 1' 5 3 5:2|7, 2 4 2 7, 2 7,:2|4 6 4 2 4 6 4:2|3 5 3 1 3 1 1:2|6 1' 6 3 5 3 6:2|4 6 4 2 4 2 4:2|1 3 5 3 1 3 5:2|7, 2 4 2 4 6 4:2|4 6 1' 6 4 2 4:2|2 4 2 7, 2 7, 2:2|3 5 1' 5 3 5 3:2|1 3 5 1':5" },
+    // Hexenhütte: harmonisch Moll, unheimlich
+    witch: { key: 'E4', mode: 'harm', bpm: 190, wave: 'triangle', bass: 'drone', arp: 'broken', pad: true,
+      prog: [1, 4, 5, 1, 6, 4, 5, 1, 4, 1, 6, 5, 4, 6, 5, 1],
+      mel: "5:2 3 1 3:2 5:2|4:2 6 4 1:3 -|5:2 7 5 2':2 7:2|1':3 7 5:2 3:2|6:2 1' 6 3':2 1':2|4:2 6 1' 6:2 4:2|7:2 5 7 2':3 -|1':2 7 1' 5:4|6:2 4 6 1':3 -|5:2 3 5 1':3 -|3':2 1' 6 3':2 1':2|2':2 7 5 7:2 5:2|4:2 6 1' 6:2 4:2|3':3 1' 6:2 1':2|7:2 2' 7 5:2 7:2|1':6 -:2" },
+    // Sumpf: langsam, düster
+    swamp: { key: 'D4', mode: 'minor', bpm: 160, wave: 'triangle', bass: 'long', arp: 'sparse', pad: true,
+      prog: [1, 6, 4, 5, 1, 6, 3, 5, 4, 1, 6, 7, 4, 6, 5, 1],
+      mel: "3:3 5 1:2 -:2|6:3 5 3:2 -:2|4:3 6 4:2 -:2|5:2 7 5 3:2 5:2|1':3 5 3:2 -:2|6:2 1' 6 3':2 1':2|3:3 5 7:2 5:2|5:4 7 5 3:2|4:3 6 1':2 6:2|3:2 5 3 1:2 -:2|6:3 1' 6:2 4:2|7:3 2' 7:2 5:2|4:2 6 4 1':2 6:2|6:3 4 3:2 5:2|5:2 7 5 3:2 -:2|1:5 -:3" },
+    // Turm: dunkel, bedrohlich
+    tower: { key: 'C5', mode: 'harm', bpm: 200, wave: 'sawtooth', bass: 'pump', arp: 'rise', pad: true,
+      prog: [1, 4, 5, 1, 6, 4, 5, 1, 4, 1, 6, 5, 4, 6, 5, 1],
+      mel: "3:2 5 3 1:2 3:2|4:2 6 4 1:3 -|5:2 7 5 2:2 7,:2|1:3 3 5:2 3:2|6,:2 1 6, 3:2 1:2|4:2 6 4 1:2 6,:2|7,:2 2 7, 5:2 2:2|1:4 3 5 3:2|4:3 6 4:2 1:2|3:2 5 3 1:3 -|6,:2 1 3 6:2 3:2|5:2 7 2' 7:2 5:2|4:2 6 1' 6:2 4:2|3':3 1' 6:2 3:2|7:2 5 2 7,:2 5,:2|1:6 -:2" },
+    // Abspann: Triumph
+    ending: { key: 'C5', mode: 'major', bpm: 240, wave: 'square', bass: 'pump', arp: 'rise', drums: 'beat',
+      prog: [1, 5, 6, 4, 1, 5, 4, 5, 6, 4, 1, 5, 4, 5, 1, 1],
+      mel: "1:2 3 5 1':3 -|7,:2 2 5 2':2 7:2|6,:2 1 3 6:2 3:2|4:2 6 4 1':3 -|5:2 3 5 1':2 5:2|7:2 5 7 2':3 -|4:2 6 1' 6:2 4:2|2':2 7 5 7:2 2':2|6:2 1' 3' 1':2 6:2|4:2 6 1' 3':2 1':2|5:2 1' 3' 1':2 5:2|7:2 2' 7 5:2 7:2|6:2 4 6 1':2 4:2|2':2 7 5 2':2 7:2|1':3 5 3':2 1':2|1':6 -:2" },
+  };
+  const TRACKS = {};
+  for (const k in SONGS) TRACKS[k] = compile(SONGS[k]);
 
   function init() {
     if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
@@ -64,18 +144,34 @@ const Audio8 = (() => {
       master = ac.createGain(); master.gain.value = enabled ? 0.5 : 0; master.connect(ac.destination);
       musGain = ac.createGain(); musGain.gain.value = 0.18; musGain.connect(master);
       sfxGain = ac.createGain(); sfxGain.gain.value = 0.5; sfxGain.connect(master);
+      // weiches Echo (punktierte Achtel) für die Melodie
+      echoIn = ac.createGain(); echoIn.gain.value = 0.3;
+      echoDly = ac.createDelay(2); echoDly.delayTime.value = 0.36;
+      const fb = ac.createGain(); fb.gain.value = 0.3;
+      echoIn.connect(echoDly); echoDly.connect(fb); fb.connect(echoDly); echoDly.connect(musGain);
     } catch (e) { ac = null; }
+    // Die Titelmusik wurde schon vor dem ersten Klick „gewählt“ – jetzt, wo der AudioContext
+    // existiert (Browser erlauben Ton erst nach einer Geste), muss der Sequencer wirklich starten.
+    if (ac && track) { pos = 0; nextTime = ac.currentTime + 0.1; setEcho(); if (!timer) timer = setInterval(schedule, 80); }
+  }
+  // Tab im Hintergrund: Ton anhalten, beim Zurückkehren sauber weiterlaufen
+  function setHidden(hidden) {
+    if (!ac) return;
+    if (hidden) { if (ac.state === 'running') ac.suspend(); }
+    else if (ac.state === 'suspended') ac.resume();
   }
 
-  function tone(t, f, dur, type, vol, dest, slideTo) {
+  function tone(t, f, dur, type, vol, dest, slideTo, att, echo) {
     if (!ac || !f) return;
     const o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.setValueAtTime(f, t);
     if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    const a = Math.min(att || 0.01, dur * 0.5);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(vol, t + a);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(dest || sfxGain);
+    if (echo && echoIn) g.connect(echoIn);
     o.start(t); o.stop(t + dur + 0.02);
   }
   function noise(t, dur, vol, filt, dest) {
@@ -91,33 +187,38 @@ const Audio8 = (() => {
     s.start(t);
   }
 
-  // Sequencer: plant immer ~0.3 s im Voraus
-  function schedule() {
-    if (!ac || !track) return;
-    const tr = track, eighth = 60 / tr.bpm;
-    while (nextTime < ac.currentTime + 0.3) {
-      // Positionen in Achteln für beide Stimmen berechnen
-      const pos = step;
-      for (const [voice, seq, type, oct, vol] of [['L', tr.L, tr.wave, 1, 0.22], ['B', tr.B, 'triangle', 1, 0.35]]) {
-        let acc = 0, total = seq.reduce((a, b) => a + b[1], 0);
-        const p = pos % total;
-        for (const [f, l] of seq) {
-          if (Math.abs(acc - p) < 0.001 && f) tone(nextTime, f * oct, l * eighth * 0.95, type, vol, musGain);
-          acc += l;
-          if (acc > p + 0.001) break;
-        }
-      }
-      nextTime += eighth * 0.5;
-      step += 0.5;
+  // Sequencer: plant immer ~0.3 s im Voraus, in Sechzehnteln (halbe Achtel)
+  function playEv(e, t, eighth, tr) {
+    switch (e.v) {
+      case 'L': tone(t, e.f, Math.max(0.06, e.len * eighth * 0.96), tr.wave, 0.2 * tr.wf, musGain, null, 0.012, true); break;
+      case 'A': tone(t, e.f, eighth * 0.85, tr.o.pad ? 'sine' : 'square', tr.o.pad ? 0.1 : 0.05, musGain); break;
+      case 'B': tone(t, e.f, e.len * eighth * 0.92, 'triangle', 0.34, musGain); break;
+      case 'P': tone(t, e.f, e.len * eighth * 1.05, 'sine', 0.045, musGain, null, 0.45); break;
+      case 'K': tone(t, 120, 0.13, 'triangle', 0.28, musGain, 45); break;
+      case 'S': noise(t, 0.09, 0.13, 3600, musGain); break;
+      case 'H': noise(t, 0.03, 0.045, 8000, musGain); break;
     }
   }
-
+  function schedule() {
+    if (!ac || !track) return;
+    // Nach Hintergrund-Pause/Timer-Drosselung nicht alle verpassten Noten auf einmal abfeuern
+    if (nextTime < ac.currentTime - 0.1) nextTime = ac.currentTime + 0.05;
+    const eighth = 60 / track.bpm, n = track.ev.length;
+    while (nextTime < ac.currentTime + 0.3) {
+      const evs = track.ev[pos % n];
+      if (evs) for (const e of evs) playEv(e, nextTime, eighth, track);
+      nextTime += eighth * 0.5;
+      pos++;
+    }
+  }
+  function setEcho() { if (echoDly && track) echoDly.delayTime.value = (60 / track.bpm) * 1.5; }
   function music(name) {
     if (name === trackName) return;
     trackName = name;
     track = TRACKS[name] || null;
     if (!ac) return;
-    step = 0; nextTime = ac.currentTime + 0.1;
+    pos = 0; nextTime = ac.currentTime + 0.1;
+    setEcho();
     if (!timer) timer = setInterval(schedule, 80);
   }
 
@@ -150,6 +251,8 @@ const Audio8 = (() => {
     try { localStorage.setItem('zack-sound', on ? 'on' : 'off'); } catch (e) { /* egal */ }
     if (master) master.gain.value = on ? 0.5 : 0;
   }
+  // Musik leiser, während eine Stimme (TTS) spricht
+  function duck(on) { if (musGain && enabled) musGain.gain.value = on ? 0.06 : 0.18; }
 
-  return { init, music, sfx, setEnabled, get enabled() { return enabled; } };
+  return { init, music, sfx, setEnabled, setHidden, duck, tracks: SONGS, get enabled() { return enabled; } };
 })();

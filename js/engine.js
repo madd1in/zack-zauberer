@@ -32,9 +32,18 @@ const E = {
   particles: [],
   overlay: null,
   shake: 0,
+  hint: false,              // Hotspots hervorheben (Taste H halten / Knopf)
+  hintUntil: 0,
+  eye: false,               // Touch: Aug-Knopf – Antippen wirkt wie Langdruck („Schau an“)
+  press: null,              // Touch: laufender Langdruck
+  slop: 0,                  // Touch-Toleranz beim Treffen kleiner Objekte (logische Pixel)
+  touchy: false,            // letzte Eingabe kam per Touch/Stift
+  taps: [],                 // Tipp-Wellen (Touch-Feedback)
 };
 
 let S, sx, V, vx;
+
+let UP = null, upx = null, upK = 0;   // Zwischenpuffer für glatte, gleichmäßige Pixel bei krummen Skalierungen
 
 function setupCanvas() {
   S = document.createElement('canvas'); S.width = W; S.height = H;
@@ -43,19 +52,34 @@ function setupCanvas() {
   vx = V.getContext('2d');
   resize();
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+  document.addEventListener('fullscreenchange', () => setTimeout(resize, 60));
+  document.addEventListener('webkitfullscreenchange', () => setTimeout(resize, 60));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 }
 
+// Das Spiel füllt das ganze Fenster (Seitenverhältnis 16:10 bleibt, der Rest wird schwarz)
 function resize() {
-  const bar = document.getElementById('bar');
-  const availW = window.innerWidth - 32;
-  const availH = window.innerHeight - (bar ? bar.offsetHeight : 0) - 16;
-  let s = Math.min(availW / W, availH / H);
-  s = s >= 2 ? Math.floor(s) : Math.max(0.5, s);
+  const vv = window.visualViewport;
+  const vw = vv ? vv.width : window.innerWidth, vh = vv ? vv.height : window.innerHeight;
+  const s = Math.max(0.5, Math.min(vw / W, vh / H));
   const dpr = window.devicePixelRatio || 1;
-  V.style.width = Math.round(W * s) + 'px';
-  V.style.height = Math.round(H * s) + 'px';
+  V.style.width = Math.floor(W * s) + 'px';
+  V.style.height = Math.floor(H * s) + 'px';
   E.R = s * dpr;
-  V.width = Math.round(W * E.R); V.height = Math.round(H * E.R);
+  V.width = Math.max(1, Math.round(W * E.R)); V.height = Math.max(1, Math.round(H * E.R));
+  vx.imageSmoothingEnabled = false;
+}
+
+// Szene auf die Leinwand bringen: bei ganzzahliger Skalierung hart (Pixel-Look), sonst erst auf ein
+// ganzzahliges Vielfaches hochziehen und dann sauber herunterskalieren, damit keine Pixel „flackern“.
+function blitScene() {
+  const f = V.width / W, k = Math.max(1, Math.ceil(f));
+  if (Math.abs(f - Math.round(f)) < 0.02 || f < 1) { vx.imageSmoothingEnabled = false; vx.drawImage(S, 0, 0, V.width, V.height); return; }
+  if (!UP || upK !== k) { UP = document.createElement('canvas'); UP.width = W * k; UP.height = H * k; upx = UP.getContext('2d'); upK = k; }
+  upx.imageSmoothingEnabled = false; upx.drawImage(S, 0, 0, W * k, H * k);
+  vx.imageSmoothingEnabled = true; vx.imageSmoothingQuality = 'high';
+  vx.drawImage(UP, 0, 0, V.width, V.height);
   vx.imageSmoothingEnabled = false;
 }
 
@@ -161,6 +185,11 @@ function updateZack(dt) {
   } else {
     z.x += dx / d * sp; z.y += (dy / d * sp) / 1.7;
     z.animT += dt;
+    z.dustT = (z.dustT || 0) + dt;
+    if (z.dustT > 0.17 && E.particles.length < 160) {      // kleine Staubwölkchen unter den Füßen
+      z.dustT = 0;
+      E.particles.push({ x: z.x + (Math.random() - 0.5) * 3, y: z.y - 1, vx: -Math.sign(dx) * 5 + (Math.random() - 0.5) * 4, vy: -5 - Math.random() * 3, g: 6, life: 0.3 + Math.random() * 0.15, c: E.room && E.room.dust || '#b8a888' });
+    }
   }
 }
 
@@ -190,11 +219,13 @@ function speak(who, text, ms) {
       text, info, until: E.t + dur / 1000,
       resolve: () => { if (E.speech && E.speech.text === text) { E.speech = null; E.talking = null; } res(); },
     };
+    // Optional: Zeile per ElevenLabs-Stimme sprechen (Blasendauer folgt dem Audio)
+    if (typeof TTS !== 'undefined' && TTS.enabled()) TTS.speak(info.id, text, E.speech);
   });
 }
 const say = (text, ms) => speak('zack', text, ms);
 const sayAs = (who, text, ms) => speak(who, text, ms);
-function skipSpeech() { if (E.speech) E.speech.resolve(); }
+function skipSpeech() { if (typeof TTS !== 'undefined') TTS.stop(); if (E.speech) E.speech.resolve(); }
 
 // ------------------------------------------------------------ Dialoge
 function choose(lines) {
@@ -223,7 +254,7 @@ function burst(x, y, n, cols, spread) {
   }
 }
 function updateParticles(dt) {
-  for (const p of E.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 30 * dt; p.life -= dt; }
+  for (const p of E.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += (p.g === undefined ? 30 : p.g) * dt; p.life -= dt; }
   E.particles = E.particles.filter(p => p.life > 0);
 }
 async function flash(color, ms) {
@@ -261,6 +292,7 @@ async function goRoom(id, x, y, dir, opts) {
   if (!opts.noFade) await fadeTo(1, 260);
   setRoom(id);
   place(x, y, dir);
+  if (typeof TTS !== 'undefined') TTS.stop();
   E.speech = null; E.talking = null;
   if (E.room.before) E.room.before();
   if (!opts.noFade) await fadeTo(0, 260); else E.fade = 0;
@@ -364,6 +396,19 @@ function objectAt(x, y) {
     if (!o.name || !visible(o) || (o.noHover && o.noHover())) continue;
     if (hit(o, x, y)) return o;
   }
+  if (E.slop > 0) {                       // Touch: knapp daneben zählt auch (kleine Objekte sind mit dem Finger schwer zu treffen)
+    let best = null, bd = E.slop;
+    for (const o of objs) {
+      if (!o.name || !visible(o) || (o.noHover && o.noHover())) continue;
+      let r = o.rect;
+      if (o.poly) { const xs = o.poly.map(p => p[0]), ys = o.poly.map(p => p[1]); const x0 = Math.min(...xs), y0 = Math.min(...ys); r = [x0, y0, Math.max(...xs) - x0, Math.max(...ys) - y0]; }
+      if (!r) continue;
+      const dx = Math.max(r[0] - x, 0, x - (r[0] + r[2])), dy = Math.max(r[1] - y, 0, y - (r[1] + r[3]));
+      const d = Math.hypot(dx, dy);
+      if (d <= bd) { bd = d; best = o; }
+    }
+    return best;
+  }
   return null;
 }
 function uiAt(x, y) {
@@ -394,16 +439,48 @@ function uiAt(x, y) {
   return o ? { type: 'obj', o } : { type: 'scene' };
 }
 function onMove(ev) {
+  if (ev.pointerType === 'mouse') { E.slop = 0; E.touchy = false; }
   const [x, y] = toInternal(ev);
   E.mouse.x = x; E.mouse.y = y; E.mouse.inside = true;
   if (E.mode === 'game') E.hover = uiAt(x, y);
 }
+const LONGPRESS_MS = 450;
+function cancelPress() { if (E.press) { clearTimeout(E.press.timer); E.press = null; } }
 function onDown(ev) {
   ev.preventDefault();
   Audio8.init();
   const [x, y] = toInternal(ev);
-  E.mouse.x = x; E.mouse.y = y;
-  const right = ev.button === 2;
+  E.mouse.x = x; E.mouse.y = y; E.mouse.inside = true;
+  // Touch/Stift: kein Rechtsklick vorhanden → Langdruck = „Schau an“. Die normale Aktion
+  // wird dann erst beim Loslassen ausgelöst (außer es war ein Langdruck).
+  const touchy = ev.pointerType === 'touch' || ev.pointerType === 'pen';
+  E.touchy = touchy; E.slop = touchy ? 6 : 0;
+  if (touchy && E.mode === 'game' && !E.speech && !E.dialog && !E.busy) {
+    cancelPress();
+    E.hover = uiAt(x, y);
+    const pr = { x, y, cx: ev.clientX, cy: ev.clientY, fired: false, id: ev.pointerId };
+    pr.timer = setTimeout(() => {
+      pr.fired = true;
+      const u = uiAt(pr.x, pr.y);
+      if (u && (u.type === 'obj' || u.type === 'inv')) { try { navigator.vibrate && navigator.vibrate(15); } catch (e) { /* egal */ } handlePointer(pr.x, pr.y, true); }
+    }, LONGPRESS_MS);
+    E.press = pr;
+    return;
+  }
+  handlePointer(x, y, ev.button === 2);
+}
+function onUp(ev) {
+  const pr = E.press;
+  if (!pr || (ev.pointerId !== undefined && pr.id !== undefined && ev.pointerId !== pr.id)) return;
+  cancelPress();
+  if (!pr.fired) handlePointer(pr.x, pr.y, false);
+}
+function onPressMove(ev) {
+  const pr = E.press;
+  if (pr && Math.hypot(ev.clientX - pr.cx, ev.clientY - pr.cy) > 10) { clearTimeout(pr.timer); pr.fired = true; E.press = null; }
+}
+function handlePointer(x, y, right) {
+  if (E.touchy && (E.mode === 'game') && y < SCENE_H) E.taps.push({ x, y, t: E.t });
   if (E.mode === 'title') { if (window.titleClick) window.titleClick(x, y); return; }
   if (E.mode === 'card') { if (E.card && E.card.resolve) E.card.resolve(); return; }
   if (E.mode === 'end') { if (window.endClick) window.endClick(); return; }
@@ -422,12 +499,12 @@ function onDown(ev) {
   if (u.type === 'up') { E.invScroll = Math.max(0, E.invScroll - 1); return; }
   if (u.type === 'down') { const rows = Math.ceil(E.inv.length / INV_COLS); E.invScroll = Math.min(Math.max(0, rows - INV_ROWS), E.invScroll + 1); return; }
   if (u.type === 'inv') {
-    if (right) return invAction('look', u.id);
+    if (right || E.eye) return invAction('look', u.id);
     if (E.pending) return comboAction(E.pending.verb, E.pending.item, u.id);
     return invAction(E.verb, u.id);
   }
   if (u.type === 'obj') {
-    if (right) return doAction('look', u.o);
+    if (right || E.eye) return doAction('look', u.o);
     if (E.pending) return doAction(E.pending.verb, u.o, E.pending.item);
     return doAction(E.verb, u.o);
   }
@@ -493,17 +570,21 @@ function drawZack(ctx) {
   const w = ZACK_O.w * s, h = ZACK_O.h * s;
   const dx = Math.round(z.x - ZACK_O.ox * s), dy = Math.round(z.y - ZACK_O.oy * s);
   // Schatten
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.fillRect(Math.round(z.x - 6 * s), Math.round(z.y - 1), Math.round(12 * s), 2);
+  for (let k = -1; k <= 1; k++) {            // weiche Ellipse aus drei Zeilen
+    const w2 = Math.round(13 * s * (k === 0 ? 1 : 0.68));
+    ctx.fillStyle = k === 0 ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.16)';
+    ctx.fillRect(Math.round(z.x - w2 / 2), Math.round(z.y - 1 + k), w2, 1);
+  }
   if (z.dir === 'left') {
     ctx.save(); ctx.translate(Math.round(z.x * 2 - 0), 0); ctx.scale(-1, 1);
     ctx.drawImage(img, Math.round(z.x - ZACK_O.ox * s), dy, Math.round(w), Math.round(h));
     ctx.restore();
   } else ctx.drawImage(img, dx, dy, Math.round(w), Math.round(h));
 }
-// NPC-/Objekt-Sprites zeichnen (Ursprung = Fußpunkt)
-function blit(ctx, img, x, y, ox, oy, s, flip) {
+// NPC-/Objekt-Sprites zeichnen (Ursprung = Fußpunkt); shadowW = optionale Schattenbreite
+function blit(ctx, img, x, y, ox, oy, s, flip, shadowW) {
   s = s || 1;
+  if (shadowW) softShadow(ctx, x, y, shadowW * s);
   const w = Math.round(img.width * s), h = Math.round(img.height * s);
   const dx = Math.round(x - ox * s), dy = Math.round(y - oy * s);
   if (flip) { ctx.save(); ctx.translate(Math.round(x) * 2, 0); ctx.scale(-1, 1); ctx.drawImage(img, dx, dy, w, h); ctx.restore(); }
@@ -525,6 +606,109 @@ function drawScene(ctx) {
   for (const [, o] of list) { if (o) o.draw(ctx, E.t); else drawZack(ctx); }
   if (room.front) room.front(ctx, E.t);
   for (const p of E.particles) { ctx.fillStyle = p.c; ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1); }
+  drawHints(ctx);
+}
+
+// Hotspot-Hilfe: blinkende Marker über allen anklickbaren Dingen (Gold = Objekt, Cyan = Ausgang)
+function hotspotCenter(o) {
+  if (o.poly) { const n = o.poly.length; return [o.poly.reduce((a, p) => a + p[0], 0) / n, o.poly.reduce((a, p) => a + p[1], 0) / n]; }
+  const r = o.rect; return r ? [r[0] + r[2] / 2, r[1] + r[3] / 2] : null;
+}
+function drawHints(ctx) {
+  if (!E.hint || !E.room) return;
+  const pulse = 0.5 + 0.5 * Math.sin(E.t * 6);
+  for (const o of E.room.objects) {
+    if (!o.name || !visible(o) || (o.noHover && o.noHover())) continue;
+    const c = hotspotCenter(o); if (!c) continue;
+    const x = Math.round(Math.max(3, Math.min(W - 4, c[0]))), y = Math.round(Math.max(3, Math.min(SCENE_H - 4, c[1])));
+    const col = o.exit ? '#60f0ff' : '#ffe060';
+    const r = 2 + Math.round(pulse * 2);
+    fr(ctx, x - r - 1, y - 1, 2 * r + 3, 3, '#000000'); fr(ctx, x - 1, y - r - 1, 3, 2 * r + 3, '#000000');
+    fr(ctx, x - r, y, 2 * r + 1, 1, col); fr(ctx, x, y - r, 1, 2 * r + 1, col);
+  }
+}
+
+// ------------------------------------------------------------ Szenen-Politur
+// Vignette (Ränder leicht abgedunkelt), je Raum ein Farbhauch und schwebende Partikel.
+const ROOM_FX = {
+  attic: { tint: '#ffb060', a: 0.07, motes: 'dust', dust: '#c8a870' },
+  clearing: { motes: 'pollen' },
+  village: { motes: 'pollen' },
+  tavern: { tint: '#ff9040', a: 0.07, motes: 'ember', dust: '#a89070' },
+  witch: { tint: '#a050ff', a: 0.06, motes: 'wisp', dust: '#a090a0' },
+  swamp: { tint: '#40a060', a: 0.07, motes: 'fly', dust: '#908060' },
+  towergate: { motes: 'ash' },
+  tower: { tint: '#6040a0', a: 0.09, motes: 'ash', dust: '#807890' },
+};
+let VIG = null;
+function vignette() {
+  if (VIG) return VIG;
+  const c = document.createElement('canvas'); c.width = W; c.height = SCENE_H;
+  const g = c.getContext('2d'), id = g.createImageData(W, SCENE_H), d = id.data;
+  for (let y = 0; y < SCENE_H; y++) for (let x = 0; x < W; x++) {
+    const nx = (x / (W - 1)) * 2 - 1, ny = (y / (SCENE_H - 1)) * 2 - 1;
+    const r = Math.max(0, Math.sqrt(nx * nx * 0.8 + ny * ny * 1.1) - 0.62) / 0.7;
+    const a = Math.min(1, r * r) * 0.5;
+    const i = (y * W + x) * 4; d[i] = 6; d[i + 1] = 2; d[i + 2] = 14; d[i + 3] = Math.round(a * 255);
+  }
+  g.putImageData(id, 0, 0);
+  return (VIG = c);
+}
+function hash(i, k) { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); }
+function reducedMotion() { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; }
+function drawAmbient(ctx, t) {
+  const fx = ROOM_FX[E.roomId]; if (!fx || !fx.motes || reducedMotion()) return;
+  const N = 16;
+  for (let i = 0; i < N; i++) {
+    const h1 = hash(i, 1), h2 = hash(i, 2), h3 = hash(i, 3);
+    let x, y, a, col = '#ffffff', big = false;
+    switch (fx.motes) {
+      case 'dust': x = (h1 * W + t * (2 + h3 * 3)) % W; y = 20 + h2 * 100 + Math.sin(t * 0.6 + i) * 5; a = 0.25 + 0.25 * Math.sin(t * 1.3 + i * 2); col = '#ffe8b0'; break;
+      case 'pollen': x = (h1 * W + t * (3 + h3 * 4) + Math.sin(t * 0.5 + i) * 6) % W; y = 20 + h2 * 90 + Math.sin(t * 0.8 + i * 1.3) * 7; a = 0.3 + 0.3 * Math.sin(t + i * 1.7); col = i % 3 === 0 ? '#fff6a0' : '#ffffff'; break;
+      case 'fly': x = h1 * W + Math.sin(t * 0.4 + i * 1.7) * 16; y = 30 + h2 * 85 + Math.sin(t * 0.6 + i) * 9; a = Math.max(0, Math.sin(t * 1.3 + i * 2.1)); col = '#d8ff70'; big = a > 0.6; break;
+      case 'ember': x = h1 * W + Math.sin(t * 0.9 + i) * 5; y = SCENE_H - ((h2 * 140 + t * (8 + h3 * 8)) % 140); a = Math.min(1, (y - 30) / 40); col = i % 2 ? '#ff9030' : '#ffd060'; break;
+      case 'wisp': x = h1 * W + Math.sin(t * 0.5 + i * 2) * 10; y = SCENE_H - ((h2 * 140 + t * (5 + h3 * 5)) % 140); a = 0.5 * Math.min(1, (y - 20) / 40); col = i % 2 ? '#d090ff' : '#80ffd0'; break;
+      case 'ash': x = (h1 * W + Math.sin(t * 0.7 + i) * 8 + 320) % W; y = (h2 * 130 + t * (4 + h3 * 4)) % 130; a = 0.35; col = '#b8b8c8'; break;
+      default: return;
+    }
+    if (a <= 0.05) continue;
+    ctx.globalAlpha = Math.min(1, a);
+    ctx.fillStyle = col; ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+    if (big) { ctx.globalAlpha = Math.min(1, a) * 0.3; ctx.fillRect(Math.round(x) - 1, Math.round(y), 3, 1); ctx.fillRect(Math.round(x), Math.round(y) - 1, 1, 3); }
+  }
+  ctx.globalAlpha = 1;
+}
+function drawHoverFrame(ctx) {
+  const h = E.hover;
+  if (E.mode !== 'game' || E.busy || E.touchy || !h || h.type !== 'obj') return;
+  const o = h.o; let r = o.rect;
+  if (o.poly) { const xs = o.poly.map(p => p[0]), ys = o.poly.map(p => p[1]); const x0 = Math.min(...xs), y0 = Math.min(...ys); r = [x0, y0, Math.max(...xs) - x0, Math.max(...ys) - y0]; }
+  if (!r || r[2] > 130 || r[3] > 90) return;                // riesige Flächen (Landschaft) bekommen keinen Rahmen
+  const x0 = Math.max(0, r[0]), y0 = Math.max(0, r[1]), x1 = Math.min(W - 1, r[0] + r[2] - 1), y1 = Math.min(SCENE_H - 1, r[1] + r[3] - 1);
+  const pulse = 0.55 + 0.35 * Math.sin(E.t * 7), col = o.exit ? '#60f0ff' : '#ffe060', L = 3;
+  ctx.globalAlpha = pulse;
+  for (const [x, y, dx, dy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
+    fr(ctx, dx > 0 ? x : x - L + 1, y, L, 1, col); fr(ctx, x, dy > 0 ? y : y - L + 1, 1, L, col);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawTaps(ctx) {
+  if (!E.taps.length) return;
+  E.taps = E.taps.filter(k => E.t - k.t < 0.4);
+  for (const k of E.taps) {
+    const age = (E.t - k.t) / 0.4, r = 2 + age * 9;
+    ctx.globalAlpha = 1 - age; ctx.fillStyle = '#ffffff';
+    for (let a = 0; a < 12; a++) ctx.fillRect(Math.round(k.x + Math.cos(a * Math.PI / 6) * r), Math.round(k.y + Math.sin(a * Math.PI / 6) * r * 0.7), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawPolish(ctx) {
+  const fx = ROOM_FX[E.roomId];
+  if (fx && fx.tint) { ctx.globalAlpha = fx.a; fr(ctx, 0, 0, W, SCENE_H, fx.tint); ctx.globalAlpha = 1; }
+  drawAmbient(ctx, E.t);
+  ctx.drawImage(vignette(), 0, 0);
+  drawHoverFrame(ctx);
+  drawTaps(ctx);
 }
 
 function bevel(ctx, x, y, w, h, base, hi, lo) {
@@ -536,7 +720,9 @@ function bevel(ctx, x, y, w, h, base, hi, lo) {
 function drawUI(ctx) {
   // Hintergrund (Holz-/Steinleiste)
   fr(ctx, 0, SENT_Y, W, H - SENT_Y, '#1a1024');
-  fr(ctx, 0, UI_Y - 1, W, 1, '#4a3060');
+  for (let y = UI_Y; y < H; y += 2) fr(ctx, 0, y, W, 1, '#1e1229');           // feine Streifen-Textur
+  fr(ctx, 0, UI_Y - 2, W, 1, '#2a1a3a'); fr(ctx, 0, UI_Y - 1, W, 1, '#6a4a8a');
+  fr(ctx, 0, H - 1, W, 1, '#0c0614');
   if (E.dialog) {
     fr(ctx, 0, UI_Y, W, H - UI_Y, '#120a1a');
     const d = E.dialog;
@@ -553,7 +739,9 @@ function drawUI(ctx) {
     const c = i % 3, r = Math.floor(i / 3);
     const x = 2 + c * 49, y = 150 + r * 16;
     const sel = E.verb === VERBS[i][0];
-    bevel(ctx, x, y, 47, 14, sel ? '#4c2c6c' : '#2c1c3c', sel ? '#8c5cb4' : '#4c3464', '#100818');
+    const hov = E.hover && E.hover.type === 'verb' && E.hover.verb === VERBS[i][0] && !E.busy;
+    bevel(ctx, x, y, 47, 14, sel ? '#4c2c6c' : hov ? '#3a2454' : '#2c1c3c', sel ? '#8c5cb4' : '#4c3464', '#100818');
+    if (sel) fr(ctx, x + 3, y + 11, 41, 1, '#ffd040');
   }
   // Inventar
   bevel(ctx, INV_X - 3, INV_Y - 2, SLOT_W * INV_COLS + 4, SLOT_H * INV_ROWS + 5, '#140c1c', '#0a0610', '#4a3060');
@@ -628,6 +816,7 @@ function render() {
       if (E.shake > 0) sx.translate(Math.round((Math.random() - 0.5) * 3), Math.round((Math.random() - 0.5) * 2));
       sx.beginPath(); sx.rect(0, 0, W, SCENE_H); sx.clip();
       drawScene(sx);
+      drawPolish(sx);
       sx.restore();
     }
     if (E.overlay) { sx.globalAlpha = E.overlay.a; fr(sx, 0, 0, W, SCENE_H, E.overlay.color); sx.globalAlpha = 1; }
@@ -636,8 +825,7 @@ function render() {
   } else if (E.mode === 'title' && window.drawTitle) window.drawTitle(sx, E.t);
   else if (E.mode === 'card') { /* schwarz */ }
   drawCursor(sx);
-  vx.imageSmoothingEnabled = false;
-  vx.drawImage(S, 0, 0, V.width, V.height);
+  blitScene();
   if (E.mode === 'game' || E.mode === 'end') { if (E.fade < 0.95) drawSpeech(); drawUIText(); }
   if (E.mode === 'title' && window.drawTitleText) window.drawTitleText();
   if (E.mode === 'card' && E.card) {
@@ -675,6 +863,7 @@ async function loadState(d) {
   E.mode = 'game';
   E.inv = d.inv; E.flags = d.flags; E.zack.hat = !!d.hat;
   E.verb = 'walk'; E.pending = null; E.dialog = null; E.speech = null; E.busy = false;
+  if (typeof TTS !== 'undefined') TTS.stop();
   E.fade = 1;
   setRoom(d.room); place(d.x, d.y, d.dir);
   if (E.room.before) E.room.before();
@@ -697,6 +886,7 @@ function step(ts) {
     if (E.room && E.room.update) E.room.update(dt, E.t);
     updateParticles(dt);
     if (E.shake > 0) E.shake -= dt;
+    if (E.hintUntil && E.t > E.hintUntil) { E.hint = false; E.hintUntil = 0; }
     if (!E.busy && !E.dialog && E.mouse.inside && E.mode === 'game') E.hover = uiAt(E.mouse.x, E.mouse.y);
   }
   render();
@@ -710,12 +900,31 @@ function startEngine() {
   V.addEventListener('pointerdown', onDown);
   V.addEventListener('pointerleave', () => { E.mouse.inside = false; E.hover = null; });
   V.addEventListener('contextmenu', e => e.preventDefault());
+  V.addEventListener('pointerup', onUp);
+  V.addEventListener('pointercancel', cancelPress);
+  window.addEventListener('pointermove', onPressMove);
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' || e.key === ' ' || e.key === '.' || e.key === 'Enter') {
       if (E.mode === 'card' && E.card) E.card.resolve();
       else if (E.speech) skipSpeech();
       e.preventDefault();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (E.mode !== 'game') return;
+    if ((e.key === 'h' || e.key === 'H') && !e.repeat) { E.hint = true; E.hintUntil = 0; return; }
+    if (e.key >= '1' && e.key <= '9') {
+      const n = parseInt(e.key, 10) - 1;
+      if (E.dialog) {                         // Dialogzeilen per Zifferntaste wählen
+        const d = E.dialog, i = n + (d.scroll || 0);
+        if (n < 5 && i < d.lines.length) { E.dialog = null; Audio8.sfx('blip'); d.resolve(i); }
+      } else if (!E.busy && !E.speech) {      // Verben per Zifferntaste wählen
+        E.verb = VERBS[n][0]; E.pending = null; Audio8.sfx('blip');
+      }
+      e.preventDefault();
     }
   });
+  window.addEventListener('keyup', e => { if (e.key === 'h' || e.key === 'H') E.hint = false; });
+  window.addEventListener('blur', () => { E.hint = false; cancelPress(); });
   requestAnimationFrame(loop);
 }

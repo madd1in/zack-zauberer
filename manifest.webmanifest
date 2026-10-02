@@ -1,0 +1,17 @@
+{
+  "name": "Zack – Zauberer wider Willen",
+  "short_name": "Zack",
+  "description": "Point-and-Click-Adventure im Stil der 90er: Rette den Zauberer Grimbart und besiege Morbus Muffelgrau.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#07040e",
+  "theme_color": "#07040e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

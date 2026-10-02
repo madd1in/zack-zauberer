@@ -81,6 +81,13 @@ ROOMS.witch = {
     ctx.globalAlpha = 1;
     for (let i = 0; i < 9; i++) { const h = 2 + Math.abs(Math.sin(t * 11 + i)) * 5; fr(ctx, 155 + i * 3, 109 - h, 2, h, i % 2 ? '#f08020' : '#f0d040'); }
   },
+  front(ctx, t) {
+    // Pulsierendes Kessellicht über den Raum (Farbe je nach Trank-Fortschritt)
+    const a = 0.15 + Math.sin(t * 2.3) * 0.06 + Math.sin(t * 5.7 + 2) * 0.03;
+    ctx.globalAlpha = Math.max(0.05, a);
+    ctx.drawImage(glowCanvas(flag('potionDone') ? '#ff60c0' : '#60e860', 30), 112, 46, 110, 88);
+    ctx.globalAlpha = 1;
+  },
   objects: [
     {
       id: 'kraeuter', name: 'Kräuterbündel', rect: [50, 10, 230, 18], walk: [160, 112], face: 'up',
@@ -138,7 +145,7 @@ ROOMS.witch = {
     {
       id: 'katze', name: 'Kater', the: 'der Kater', rect: [250, 42, 26, 22], walk: [262, 112], face: 'up', z: 63,
       npc: { color: '#e0d040', head: [262, 42] },
-      draw(ctx, t) { blit(ctx, catSprite(Math.floor(t * 1.2) % 2, blink(9)), 262, 63, 10, 18); },
+      draw(ctx, t) { blit(ctx, catSprite(Math.floor(t * 1.2) % 2, blink(9)), 262, 63, 10, 18, 1, false, 10); },
       on: {
         look: () => say('Ein schwarzer Kater. Er starrt mich an, als wäre ich sein Mittagessen.'),
         talk: async () => { await say('Miez, miez?'); await sayAs('katze', 'Mrrrau.'); await say('Hat der Kater gerade "Verzieh dich" gesagt?'); await sayAs('walpurga', 'Das ist Mephisto. Er mag keine Kinder. Er mag eigentlich niemanden.'); },
@@ -161,7 +168,7 @@ ROOMS.witch = {
     {
       id: 'walpurga', name: 'Walpurga', the: 'Walpurga', rect: [110, 44, 32, 70], walk: [100, 120], face: 'right', z: 114,
       npc: { color: '#d8a0ff', head: [126, 44] },
-      draw(ctx, t) { blit(ctx, witchSprite(blink(11), talking('walpurga'), Math.floor(t * 3) % 3), 126, 114, 20, 70); },
+      draw(ctx, t) { blit(ctx, witchSprite(blink(11), talking('walpurga'), Math.floor(t * 3) % 3), 126, 114, 20, 70, 1, false, 22); },
       on: {
         look: () => say('Hexe Walpurga. Grüne Haut, krumme Nase, spitzer Hut. Klassisch.'),
         talk: () => talkWitch(),
@@ -339,6 +346,13 @@ ROOMS.swamp = {
       const x = 130 + i * 40;
       if (k < 0.3) fr(ctx, x, 92 - k * 6, 2, 1, '#6a8a6a');
     }
+    // Schimmern auf der Wasseroberfläche
+    for (let i = 0; i < 9; i++) {
+      if (Math.sin(t * 1.8 + i * 1.7) < 0.4) continue;
+      const x = 116 + ((i * 47 + Math.floor(t * 4) * 3) % 196), y = 74 + ((i * 13) % 24);
+      fr(ctx, x, y, 2, 1, i % 3 ? '#6a9070' : '#8ab890');
+      fr(ctx, x + 2, y, 1, 1, '#a8d0a8');
+    }
   },
   update(dt, t) {
     if (flag('trollLaughing') && Math.floor(t * 0.8) !== Math.floor((t - dt) * 0.8)) Audio8.sfx('laugh');
@@ -401,7 +415,7 @@ ROOMS.swamp = {
     {
       id: 'frosch', name: 'Frosch', the: 'der Frosch', rect: [172, 82, 22, 16], walk: [182, 108], face: 'up', z: 97,
       npc: { color: '#90ff70', head: [182, 82] },
-      draw(ctx, t) { blit(ctx, frogSprite(Math.floor(t * 0.7) % 2, talking('frosch')), 182, 97, 10, 14); },
+      draw(ctx, t) { blit(ctx, frogSprite(Math.floor(t * 0.7) % 2, talking('frosch')), 182, 97, 10, 14, 1, false, 9); },
       on: {
         look: () => say('Ein Frosch mit einer winzigen Krone. Natürlich.'),
         talk: () => talkFrog(),
@@ -422,8 +436,8 @@ ROOMS.swamp = {
       draw(ctx, t) {
         const laugh = flag('trollLaughing');
         const f = Math.floor(t * (laugh ? 10 : 1)) % 2;
-        if (flag('bridgeOpen')) blit(ctx, trollSprite(f, talking('troll'), laugh), 28, 122, 28, 74);
-        else blit(ctx, trollSprite(f, talking('troll'), laugh), 54, 104, 28, 74);
+        if (flag('bridgeOpen')) blit(ctx, trollSprite(f, talking('troll'), laugh), 28, 122, 28, 74, 1, false, 30);
+        else blit(ctx, trollSprite(f, talking('troll'), laugh), 54, 104, 28, 74, 1, false, 30);
       },
       on: {
         look: () => say('Ein Brückentroll. Groß, grün und mit dem Charme einer Kläranlage.'),
@@ -640,7 +654,7 @@ ROOMS.towergate = {
       npc: { color: '#d0d0d8', head: [135, 34] },
       draw(ctx) {
         const img = gargoyleSprite(talking('fratz'), isTalking('fratz'));
-        blit(ctx, img, 135, 73, 22, 38);
+        blit(ctx, img, 135, 73, 22, 38, 1, false, 18);
       },
       on: {
         look: () => say('Ein steinerner Wasserspeier. Seine Augen folgen mir. Das ist nicht gruselig. Gar nicht.'),
@@ -801,8 +815,8 @@ ROOMS.tower = {
       id: 'zwerge', name: 'Gartenzwerg-Sammlung', rect: [138, 10, 74, 62], walk: [176, 116], face: 'up', z: 72,
       draw(ctx) {
         const g = !flag('colorRestored');
-        for (let i = 0; i < 5; i++) blit(ctx, gnomeSprite(false, false, g), 146 + i * 14, 42, 12, 34, 0.8);
-        for (let i = 0; i < 4; i++) blit(ctx, gnomeSprite(false, false, g), 152 + i * 16, 70, 12, 34, 0.8, i % 2 === 1);
+        for (let i = 0; i < 5; i++) blit(ctx, gnomeSprite(false, false, g), 146 + i * 14, 42, 12, 34, 0.8, false, 12);
+        for (let i = 0; i < 4; i++) blit(ctx, gnomeSprite(false, false, g), 152 + i * 16, 70, 12, 34, 0.8, i % 2 === 1, 12);
       },
       on: {
         look: () => say(flag('colorRestored') ? 'Die Gartenzwerge werden langsam wieder bunt. Einer zwinkert mir zu!' : 'Graue Gartenzwerge. Alles verzauberte Leute, schätze ich. Einer sieht aus wie der Bäcker vom Dorf.'),
@@ -831,7 +845,7 @@ ROOMS.tower = {
       npc: { color: '#b0b8ff', head: [224, 30] },
       draw(ctx, t) {
         const c = flag('morbusCharging');
-        blit(ctx, morbusSprite(blink(13), talking('morbus'), c, Math.floor(t * 8) % 2), 226, 118, 22, 78);
+        blit(ctx, morbusSprite(blink(13), talking('morbus'), c, Math.floor(t * 8) % 2), 226, 118, 22, 78, 1, false, 24);
       },
       on: {
         look: () => say('Morbus Muffelgrau. Grauer Umhang, grauer Bart, graue Seele. Und ein Monokel.'),
@@ -860,7 +874,7 @@ ROOMS.tower = {
       id: 'morbusgnome', name: 'Muffelgrau (Gartenzwerg)', the: 'Muffelgrau', rect: [214, 84, 24, 36], walk: [196, 122], face: 'right', z: 118,
       hidden: () => !flag('morbusDefeated'),
       npc: { color: '#b0b8ff', head: [227, 82] },
-      draw(ctx) { blit(ctx, gnomeSprite(blink(4), talking('morbusgnome'), true), 226, 118, 12, 34); },
+      draw(ctx) { blit(ctx, gnomeSprite(blink(4), talking('morbusgnome'), true), 226, 118, 12, 34, 1, false, 16); },
       on: {
         look: () => say('Morbus Muffelgrau. Jetzt im praktischen Gartenzwerg-Format.'),
         talk: async () => { await sayAs('morbusgnome', 'Grmpf. Lass mich in Ruhe. Ich bewundere gerade mein Spiegelbild im Fußboden.'); },
@@ -872,7 +886,7 @@ ROOMS.tower = {
       id: 'grimbart3', name: 'Grimbart', the: 'Grimbart', rect: [104, 52, 28, 70], walk: [140, 122], face: 'left', z: 122,
       hidden: () => !flag('grimbartHere'),
       npc: { color: '#ffe060', head: [118, 52] },
-      draw(ctx) { blit(ctx, wizardSprite(blink(5), talking('grimbart3'), flag('portalCasting')), 118, 122, 18, 68); },
+      draw(ctx) { blit(ctx, wizardSprite(blink(5), talking('grimbart3'), flag('portalCasting')), 118, 122, 18, 68, 1, false, 24); },
       on: { look: () => say('Grimbart. Plötzlich ist er da. Wie praktisch.'), talk: () => sayAs('grimbart3', 'Bereit für die Heimreise?') },
     },
   ],

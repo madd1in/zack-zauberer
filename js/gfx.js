@@ -254,3 +254,27 @@ function cached(key, build) {
 
 // Pixelschrift-freie Hilfen für dynamische Effekte direkt auf dem 2D-Kontext
 function fr(ctx, x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); }
+
+// Weicher Bodenschatten (wie bei Zack) für Figuren und Requisiten
+function softShadow(ctx, x, y, w) {
+  const w2 = Math.round(w / 2);
+  for (let k = -1; k <= 1; k++) {
+    const ww = Math.round(w2 * (k === 0 ? 1 : 0.68));
+    ctx.fillStyle = k === 0 ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.16)';
+    ctx.fillRect(Math.round(x - ww / 2), Math.round(y - 1 + k), ww, 1);
+  }
+}
+
+// Vorgerechneter runder Lichtschein (gerastert, VGA-Look) für Flacker-Overlays.
+// Einmal drawImage pro Frame, Breite/Höhe beim Aufruf skalieren.
+function glowCanvas(col, r) {
+  return cached('glow|' + col + '|' + r, () => {
+    const d = r * 2, p = new Pix(d, d);
+    for (let y = 0; y < d; y++) for (let x = 0; x < d; x++) {
+      const dist = Math.hypot(x - r, y - r) / r;
+      if (dist > 1) continue;
+      if (BAYER4[y & 3][x & 3] < Math.round((1 - dist) ** 2 * 16)) p.set(x, y, col);
+    }
+    return p.canvas();
+  });
+}

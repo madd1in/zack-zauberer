@@ -8,8 +8,11 @@ function resetState() {
   E.flags = {};
   E.zack.hat = false; E.zack.visible = true;
   E.verb = 'walk'; E.pending = null; E.dialog = null; E.speech = null; E.talking = null;
-  E.busy = false; E.particles = []; E.overlay = null; E.fade = 0;
+  E.busy = false; E.particles = []; E.overlay = null; E.fade = 0; E.hint = false; E.hintUntil = 0; E.eye = false;
   attic.horseRock = 0; tower.beam = 0;
+  E.taps = [];
+  if (typeof TTS !== 'undefined') TTS.stop();
+  if (typeof Guide !== 'undefined') Guide.reset();
   Object.assign(chick, { x: 112, y: 126, dir: 1, t: 0, peck: false, run: 0, fed: 0 });
 }
 
@@ -37,6 +40,14 @@ window.drawTitle = (ctx, t) => {
   for (let i = 0; i < 14; i++) {
     const x = (i * 71) % 300 + 10, y = (i * 37) % 100 + 6;
     if (Math.floor(t * 2 + i) % 4 === 0) { fr(ctx, x, y, 1, 1, '#ffffff'); fr(ctx, x - 1, y, 3, 1, '#a0a8ff'); fr(ctx, x, y - 1, 1, 3, '#a0a8ff'); }
+  }
+  // Sternschnuppe alle 6 Sekunden
+  const sph = t % 6;
+  if (sph < 0.7) {
+    const k = sph / 0.7, sx2 = 258 - k * 84, sy2 = 8 + k * 26;
+    ctx.globalAlpha = 1 - k;
+    for (let i = 0; i < 5; i++) fr(ctx, Math.round(sx2 + i * 3), Math.round(sy2 - i * 0.9), 2, 1, i < 2 ? '#ffffff' : '#a8b4ff');
+    ctx.globalAlpha = 1;
   }
   // Zack groß mit Hut
   const img = zackSprite('down', 's', Math.floor(t * 1.5) % 4 === 0 && false, true);
@@ -180,6 +191,155 @@ function setupBar() {
   const help = document.getElementById('help');
   document.getElementById('btnHelp').onclick = () => help.classList.toggle('show');
   help.onclick = () => help.classList.remove('show');
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') help.classList.remove('show'); });
+  // Hotspots kurz einblenden (für Touch und alle ohne Taste H)
+  const btnHint = document.getElementById('btnHint');
+  if (btnHint) btnHint.onclick = () => {
+    if (E.mode !== 'game') return toast('Im Spiel zeigt das alle anklickbaren Dinge.');
+    E.hint = true; E.hintUntil = E.t + 2.5;
+  };
+  // Tab im Hintergrund: Ton pausieren
+  document.addEventListener('visibilitychange', () => Audio8.setHidden(document.hidden));
+  setupDisplay();
+  setupTts();
+  installGuide();
+  const btnTip = document.getElementById('btnTip');
+  if (btnTip) btnTip.onclick = () => { if (!openTip()) toast('Das Notizbuch gibt es im Spiel.'); };
+  const tipEl = document.getElementById('tip');
+  if (tipEl) tipEl.onclick = (e) => { if (e.target === tipEl) closeTip(); };
+}
+
+// ---------------- Vollbild, Menü, Touch ----------------
+// Vollbild ist Standard: FS.want bleibt an, bis der Nutzer es aktiv verlässt
+// (Esc/Knopf) – die Entscheidung wird gemerkt. Browser erlauben requestFullscreen
+// nur nach einer Nutzergeste, deshalb versucht es jede Geste erneut, bis es klappt.
+const FS = { want: true };
+try { FS.want = localStorage.getItem('zack-fs') !== 'off'; } catch (e) { /* egal */ }
+function fsSupported() { const d = document.documentElement; return !!(d.requestFullscreen || d.webkitRequestFullscreen); }
+function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+function enterFs() {
+  const d = document.documentElement, f = d.requestFullscreen || d.webkitRequestFullscreen;
+  if (!f) return false;
+  try { const r = f.call(d, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) { return false; }
+  return true;
+}
+function exitFs() {
+  const f = document.exitFullscreen || document.webkitExitFullscreen;
+  try { if (f) { const r = f.call(document); if (r && r.catch) r.catch(() => {}); } } catch (e) { /* egal */ }
+}
+function storeFs() { try { localStorage.setItem('zack-fs', FS.want ? 'on' : 'off'); } catch (e) { /* egal */ } }
+function toggleFs() { if (isFs()) { FS.want = false; storeFs(); exitFs(); } else { FS.want = true; storeFs(); enterFs(); } }
+
+function setupDisplay() {
+  const bar = document.getElementById('bar'), menu = document.getElementById('menu');
+  const touch = typeof matchMedia === 'function' && (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window);
+  if (touch) document.body.classList.add('touch');
+  // Menüleiste: bei Maus oben im Bild einblenden, bei Touch über ☰
+  let hideT = 0, pinned = false;
+  const show = () => { bar.classList.remove('hide'); clearTimeout(hideT); };
+  const hideSoon = (ms) => { clearTimeout(hideT); hideT = setTimeout(() => { if (!pinned && !bar.matches(':hover') && !bar.contains(document.activeElement)) bar.classList.add('hide'); }, ms); };
+  if (touch) {
+    menu.onclick = (e) => { e.stopPropagation(); const open = bar.classList.contains('hide'); bar.classList.toggle('hide', !open); menu.setAttribute('aria-expanded', open ? 'true' : 'false'); pinned = open; };
+    bar.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON' && e.target.id !== 'btnNew') { pinned = false; hideSoon(900); menu.setAttribute('aria-expanded', 'false'); } });
+  } else {
+    window.addEventListener('pointermove', (e) => { if (e.clientY < 46 || E.mode !== 'game') show(); else hideSoon(700); }, { passive: true });
+    window.addEventListener('keydown', (e) => { if (e.key === 'F10') { e.preventDefault(); show(); } });
+    show(); hideSoon(3500);
+  }
+  window.setInterval(() => { if (!touch && E.mode !== 'game') show(); }, 500);
+  // Vollbild: bei jeder Geste versuchen (Browser verlangen eine Geste dafür),
+  // aber gescheiterte Versuche nicht im Millisekundertakt wiederholen.
+  let fsTry = 0;
+  const first = () => {
+    if (!FS.want || !fsSupported() || isFs()) return;
+    const now = Date.now();
+    if (now - fsTry < 900) return;
+    fsTry = now;
+    enterFs();
+  };
+  window.addEventListener('pointerup', first, true);
+  window.addEventListener('keydown', first, true);
+  const btnFull = document.getElementById('btnFull');
+  if (btnFull) {
+    if (!fsSupported()) btnFull.style.display = 'none';
+    btnFull.onclick = toggleFs;
+    const upd = () => { btnFull.textContent = isFs() ? 'Fenster' : 'Vollbild'; };
+    document.addEventListener('fullscreenchange', () => { upd(); if (!isFs()) { FS.want = false; storeFs(); } });
+    document.addEventListener('webkitfullscreenchange', upd);
+    upd();
+  }
+  window.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey && fsSupported()) toggleFs(); });
+  // Hochformat-Hinweis
+  const rot = document.getElementById('btnRotOk');
+  if (rot) rot.onclick = () => document.body.classList.add('norot');
+  // Touch-Schnellknöpfe (unten links): Auge = „Schau an“ ohne Langdruck, ◎ = Hotspots
+  const eyeBtn = document.getElementById('btnEye');
+  if (eyeBtn) eyeBtn.onclick = (e) => {
+    e.stopPropagation();
+    E.eye = !E.eye;
+    eyeBtn.classList.toggle('on', E.eye);
+    toast(E.eye ? 'Auge an: Antippen schaut Dinge an.' : 'Auge aus.');
+  };
+  const spotBtn = document.getElementById('btnSpot');
+  if (spotBtn) spotBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (E.mode !== 'game') return toast('Im Spiel zeigt das alle anklickbaren Dinge.');
+    E.hint = true; E.hintUntil = E.t + 2.5;
+  };
+}
+
+// ---------------- Sprachausgabe (ElevenLabs) ----------------
+function setupTts() {
+  const dlg = document.getElementById('tts');
+  if (!dlg || typeof TTS === 'undefined') return;
+  const $ = (id) => document.getElementById(id);
+  const on = $('ttsOn'), key = $('ttsKey'), model = $('ttsModel'), vz = $('ttsZack'), vo = $('ttsOther'), info = $('ttsVoiceInfo');
+  let voices = null;
+  const addOpt = (sel, val, label) => { if (typeof sel.appendChild !== 'function') return; const o = document.createElement('option'); o.value = val; o.textContent = label; sel.appendChild(o); };
+  const fillSelect = (sel, cur) => {
+    if (typeof sel.appendChild !== 'function') return;
+    sel.innerHTML = '';
+    if (!voices || !voices.length) { addOpt(sel, cur || '', cur ? ' (ausgewählt: ' + cur.slice(0, 8) + '…)' : '– erst Stimmen laden –'); sel.value = sel.firstChild.value; return; }
+    voices.forEach(v => addOpt(sel, v.id, v.name + (v.id === cur ? ' ✓' : '')));
+    sel.value = cur && voices.some(v => v.id === cur) ? cur : (voices[0] && voices[0].id) || '';
+  };
+  const refresh = () => {
+    const c = TTS.config;
+    on.checked = !!c.on; key.value = c.key || ''; model.value = c.model || TTS.MODELS[0][0];
+    TTS.MODELS.forEach(([id, name]) => addOpt(model, id, name));
+    model.value = c.model || TTS.MODELS[0][0];
+    fillSelect(vz, c.zack); fillSelect(vo, c.other);
+  };
+  $('btnTts').onclick = () => { refresh(); dlg.classList.add('show'); };
+  $('ttsClose').onclick = () => dlg.classList.remove('show');
+  dlg.onclick = (e) => { if (e.target === dlg) dlg.classList.remove('show'); };
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') dlg.classList.remove('show'); });
+  $('ttsLoad').onclick = async (e) => {
+    e.stopPropagation();
+    if (typeof fetch !== 'function') return toast('In dieser Umgebung nicht verfügbar.');
+    TTS.set({ key: (key.value || '').trim(), model: model.value || TTS.MODELS[0][0] });
+    info.textContent = 'Lade Stimmen …';
+    try {
+      voices = await TTS.fetchVoices();
+      info.textContent = voices.length + ' Stimmen gefunden.';
+      fillSelect(vz, TTS.config.zack); fillSelect(vo, TTS.config.other);
+      if (!TTS.config.zack && voices[0]) { vz.value = voices[0].id; }
+      if (!TTS.config.other) { vo.value = (voices[1] || voices[0]).id; }
+    } catch (err) { info.textContent = ''; toast('Stimmen laden fehlgeschlagen: ' + err.message); }
+  };
+  $('ttsTest').onclick = (e) => {
+    e.stopPropagation();
+    TTS.set({ on: true, key: (key.value || '').trim(), model: model.value || TTS.MODELS[0][0], zack: vz.value || '', other: vo.value || vz.value || '' });
+    TTS.testLine().then(() => toast('Wenn du nichts hörst: Ton-Knopf und Lautstärke prüfen.')).catch(err => toast('Test fehlgeschlagen: ' + err.message));
+  };
+  $('ttsSave').onclick = (e) => {
+    e.stopPropagation();
+    const k = (key.value || '').trim();
+    TTS.set({ on: on.checked && !!k, key: k, model: model.value || TTS.MODELS[0][0], zack: vz.value || '', other: vo.value || vz.value || '' });
+    dlg.classList.remove('show');
+    toast(TTS.enabled() ? 'Sprachausgabe gespeichert und aktiv.' : (on.checked ? 'Ohne Schlüssel bleibt die Sprachausgabe aus.' : 'Sprachausgabe aus.'));
+  };
+  refresh();
 }
 
 // ---------------- Start ----------------
@@ -189,6 +349,10 @@ window.addEventListener('load', async () => {
   startEngine();
   setupBar();
   Audio8.music('title');
+  // Offline-fähig machen (PWA). Datei:// und die Headless-Tests bleiben unberührt.
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) { /* egal */ }
+  }
   // Spielstand bei Live-Aktualisierung der Seite erhalten (nur in der Artifact-Ansicht vorhanden)
   const hot = window.claude && window.claude.hot;
   if (hot && hot.snapshot) hot.snapshot(() => (E.mode === 'game' && !E.busy ? { save: snapshot() } : {}));

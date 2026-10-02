@@ -2,14 +2,21 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#07040e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Zack – Zauberer wider Willen</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <style>
   :root {
-    --bg: #07040e;
+    --bg: #000;
     --bar: #1a1024;
     --btn: #2c1c3c;
     --btn-hi: #4c2c6c;
@@ -22,40 +29,103 @@
     --panel: #1a1024;
     color-scheme: dark; /* bewusst nur dunkel: Nachthimmel-/VGA-Look */
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "VT323", "Courier New", monospace; overflow: hidden; }
-  body { display: flex; flex-direction: column; align-items: center; justify-content: center; padding-inline: 16px; }
-  #game { display: block; image-rendering: pixelated; image-rendering: crisp-edges; cursor: none; touch-action: none; background: #000; box-shadow: 0 0 0 2px var(--frame), 0 10px 40px rgba(0,0,0,.6); }
-  #bar { display: flex; gap: 6px; padding: 6px 8px; flex-wrap: wrap; justify-content: center; }
-  #bar button { font: inherit; font-size: 18px; color: var(--text); background: var(--btn); border: 1px solid var(--edge); border-bottom-color: var(--edge-lo); border-right-color: var(--edge-lo); padding: 2px 12px; cursor: pointer; }
-  #bar button:hover { background: var(--btn-hi); color: var(--gold); }
-  #bar button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
-  #toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: var(--btn); border: 1px solid #8c5cb4; padding: 4px 14px; font-size: 20px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; width: 100%; height: 100%; height: 100dvh; background: var(--bg); color: var(--text); font-family: "VT323", "Courier New", monospace; overflow: hidden; overscroll-behavior: none; }
+  body { display: flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  /* Das Spiel füllt das ganze Fenster (Seitenverhältnis bleibt, Rest ist schwarz) */
+  #game { display: block; image-rendering: pixelated; image-rendering: crisp-edges; cursor: none; touch-action: none; background: #000; }
+  /* Menüleiste schwebt oben über dem Spiel: Maus nach oben schieben bzw. ☰ antippen */
+  #bar { position: fixed; top: max(6px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 5; display: flex; gap: 6px; padding: 5px 8px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 16px); background: rgba(16,8,24,.88); border: 1px solid var(--edge); transition: opacity .2s, transform .2s; }
+  #bar.hide { opacity: 0; pointer-events: none; transform: translate(-50%, -12px); }
+  #bar button, #tip button, #rotate button, #quick button, #tts button { font: inherit; font-size: 18px; color: var(--text); background: var(--btn); border: 1px solid var(--edge); border-bottom-color: var(--edge-lo); border-right-color: var(--edge-lo); padding: 2px 12px; cursor: pointer; }
+  #bar button:hover, #tip button:hover:not(:disabled), #rotate button:hover, #quick button:hover, #tts button:hover { background: var(--btn-hi); color: var(--gold); }
+  #bar button:focus-visible, #tip button:focus-visible, #quick button:focus-visible, #tts button:focus-visible, #menu:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  #tip button:disabled { opacity: .45; cursor: default; }
+  #menu { display: none; position: fixed; top: max(6px, env(safe-area-inset-top)); right: max(6px, env(safe-area-inset-right)); z-index: 6; width: 40px; height: 40px; font: inherit; font-size: 24px; line-height: 1; color: var(--text); background: rgba(16,8,24,.7); border: 1px solid var(--edge); }
+  body.touch #menu { display: block; }
+  body.touch #bar { top: max(52px, calc(env(safe-area-inset-top) + 46px)); left: auto; right: max(6px, env(safe-area-inset-right)); transform: none; max-width: 70vw; justify-content: flex-end; }
+  body.touch #bar.hide { transform: translateY(-8px); }
+  body.touch #bar button { font-size: 22px; min-height: 42px; padding: 2px 14px; }
+  #toast { position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 9; max-width: 90vw; text-align: center; background: var(--btn); border: 1px solid #8c5cb4; padding: 4px 14px; font-size: 20px; opacity: 0; transition: opacity .25s; pointer-events: none; }
   #toast.show { opacity: 1; }
-  #help { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4,2,10,.85); padding: 16px; }
-  #help.show { display: flex; }
-  @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
-  #help div { max-width: 560px; background: var(--panel); border: 2px solid var(--edge); padding: 16px 20px; font-size: 20px; line-height: 1.15; }
-  #help h2 { margin: 0 0 8px; color: var(--gold); font-weight: normal; font-size: 30px; }
-  #help b { color: #80e0f0; font-weight: normal; }
-  #help p { margin: 6px 0; }
+  #help, #tip, #tts { position: fixed; inset: 0; z-index: 8; display: none; align-items: center; justify-content: center; background: rgba(4,2,10,.85); padding: 16px; overflow: auto; }
+  #help.show, #tip.show, #tts.show { display: flex; }
+  @media (prefers-reduced-motion: reduce) { #toast, #bar { transition: none; } }
+  #help > div, #tipBody, #tts > div { max-width: 560px; max-height: 100%; overflow: auto; background: var(--panel); border: 2px solid var(--edge); padding: 16px 20px; font-size: 20px; line-height: 1.15; }
+  #help h2, #tipBody h2, #tts h2 { margin: 0 0 8px; color: var(--gold); font-weight: normal; font-size: 30px; }
+  #help b, #tipBody b, #tts b { color: #80e0f0; font-weight: normal; }
+  #help p, #tipBody p, #tts p { margin: 6px 0; }
+  #tipBody { min-width: min(520px, 90vw); }
+  #tipBody .muted { color: var(--muted); }
+  #tipBody .goal b { color: var(--gold); }
+  #tipBody .hint { padding: 4px 8px; border-left: 3px solid #8c5cb4; background: rgba(76,52,100,.25); }
+  #tipBody .hint.h2 { border-left-color: var(--gold); }
+  .tipbar { height: 8px; background: #100818; border: 1px solid var(--edge); }
+  .tipbar i { display: block; height: 100%; background: linear-gradient(90deg, #8c5cb4, var(--gold)); }
+  .tipbtns { display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end; }
+  body.touch .tipbtns button, body.touch #rotate button { font-size: 22px; min-height: 44px; padding: 4px 16px; }
+  /* Hochformat auf dem Handy: Hinweis, das Gerät zu drehen */
+  #rotate { display: none; position: fixed; inset: 0; z-index: 7; flex-direction: column; gap: 14px; align-items: center; justify-content: center; text-align: center; background: #07040e; padding: 24px; font-size: 26px; }
+  #rotate .ico { font-size: 64px; color: var(--gold); animation: tilt 2.4s ease-in-out infinite; display: inline-block; }
+  @keyframes tilt { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+  @media (prefers-reduced-motion: reduce) { #rotate .ico { animation: none; transform: rotate(-90deg); } }
+  @media (orientation: portrait) and (max-width: 820px) { body:not(.norot) #rotate { display: flex; } }
+  /* Touch-Schnellknöpfe unten links: Auge = Anschauen ohne Langdruck, ◎ = Hotspots */
+  #quick { display: none; position: fixed; left: max(6px, env(safe-area-inset-left)); bottom: max(6px, env(safe-area-inset-bottom)); z-index: 5; flex-direction: column; gap: 6px; }
+  body.touch #quick { display: flex; }
+  #quick button { width: 46px; height: 46px; min-height: 46px; padding: 0; font-size: 24px; background: rgba(16,8,24,.72); }
+  #quick button.on { background: var(--btn-hi); color: var(--gold); border-color: var(--gold); }
+  /* Sprachausgabe-Dialog */
+  #tts label { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+  #tts input[type="password"] { flex: 1; min-width: 180px; font: inherit; font-size: 18px; color: var(--text); background: #0c0614; border: 1px solid var(--edge); padding: 4px 8px; }
+  #tts select { font: inherit; font-size: 18px; color: var(--text); background: #0c0614; border: 1px solid var(--edge); padding: 4px; max-width: 100%; }
+  #tts .row { margin: 8px 0; }
+  #tts .muted { color: var(--muted); }
 </style>
 </head>
 <body>
-<canvas id="game" width="640" height="400"></canvas>
-<div id="bar">
+<canvas id="game" width="640" height="400" role="application" aria-label="Zack – Zauberer wider Willen: Point-and-Click-Adventure. Verb wählen, dann Objekt anklicken."></canvas>
+<button id="menu" aria-label="Menü" aria-expanded="false">☰</button>
+<div id="bar" class="hide">
+  <button id="btnTip" title="Zacks Notizbuch: Was tun als Nächstes? (Taste T)">Tipp</button>
   <button id="btnSave">Speichern</button>
   <button id="btnLoad">Laden</button>
   <button id="btnNew">Neustart</button>
+  <button id="btnHint" title="Alle anklickbaren Dinge kurz anzeigen (Taste H)">Hotspots</button>
+  <button id="btnTts" title="Sprechtexte mit echter Stimme vorlesen lassen (ElevenLabs)">🗣 Sprache</button>
+  <button id="btnFull" title="Vollbild an/aus">Vollbild</button>
   <button id="btnSound">♪ Ton</button>
   <button id="btnHelp">Hilfe</button>
 </div>
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="quick">
+  <button id="btnEye" title="Anschauen-Modus: Antippen wirkt wie langes Drücken („Schau an“)" aria-pressed="false">👁</button>
+  <button id="btnSpot" title="Alle anklickbaren Dinge kurz anzeigen">◎</button>
+</div>
+<div id="rotate"><div class="ico" aria-hidden="true">▯</div><div>Bitte das Gerät quer halten,<br>dann ist das Spiel groß genug.</div><button id="btnRotOk">Trotzdem im Hochformat spielen</button></div>
+<div id="tip" role="dialog" aria-label="Zacks Notizbuch"><div id="tipBody"></div></div>
+<div id="tts" role="dialog" aria-label="Sprachausgabe einrichten"><div>
+  <h2>🗣 Sprachausgabe</h2>
+  <p class="muted">Zack und alle Figuren sprechen ihre Texte mit echter Stimme (ElevenLabs).</p>
+  <label><input type="checkbox" id="ttsOn"> Aktiv</label>
+  <label>API-Schlüssel <input type="password" id="ttsKey" placeholder="xi-api-key von elevenlabs.io" autocomplete="off"></label>
+  <div class="row"><button id="ttsLoad">Stimmen laden</button> <span id="ttsVoiceInfo" class="muted"></span></div>
+  <label>Stimme für Zack <select id="ttsZack"></select></label>
+  <label>Stimme für alle anderen <select id="ttsOther"></select></label>
+  <label>Sprachmodell <select id="ttsModel"></select></label>
+  <p class="hint">Kostenlos registrieren auf <b>elevenlabs.io</b>. Der Schlüssel bleibt nur in diesem Browser (localStorage), nichts wird anderweitig versendet. Jede Zeile wird nur einmal generiert und dann wiederverwendet – trotzdem gilt: Sprachausgabe verbraucht Kontingent des eigenen ElevenLabs-Kontos.</p>
+  <div class="tipbtns"><button id="ttsTest">Test</button><button id="ttsSave">Speichern</button><button id="ttsClose">Schließen</button></div>
+</div></div>
 <div id="help"><div>
   <h2>So wird gespielt</h2>
   <p><b>Verb anklicken</b>, dann ein Objekt in der Szene oder im Inventar – z.&nbsp;B. „Benutze“ → „Stock“ → „Elsternnest“.</p>
   <p><b>Rechtsklick</b> auf ein Objekt schaut es direkt an.</p>
   <p><b>Leertaste / Klick</b> überspringt Sprechtexte.</p>
+  <p><b>Nicht weiter?</b> Taste <b>T</b> oder der Knopf „Tipp“ öffnet Zacks Notizbuch: Es sagt dir, was als Nächstes dran ist, auf Wunsch Schritt für Schritt deutlicher.</p>
+  <p><b>Tasten:</b> 1–9 wählen das Verb (im Gespräch: die Antwort), <b>H</b> gedrückt halten zeigt alle anklickbaren Dinge, Esc schließt Fenster.</p>
+  <p><b>Touch:</b> Antippen = Aktion, <b>lange drücken</b> = Anschauen. Unten links gibt es Schnellknöpfe: <b>👁</b> schaltet den Anschauen-Modus ein (dann wirkt einfaches Antippen wie langes Drücken), <b>◎</b> zeigt alle anklickbaren Dinge. Mit ☰ (oben rechts) erreichst du das Menü.</p>
+  <p><b>🗣 Sprache:</b> Im Menü unter „Sprache“ kannst du ElevenLabs-Sprachausgabe aktivieren – dann lesen echte Stimmen alle Dialoge vor. Läuft komplett im Browser, Schlüssel wird nur lokal gespeichert.</p>
+  <p><b>Vollbild</b> startet beim ersten Klick von selbst (Taste F, Knopf „Vollbild“ oder Esc beendet es). Auf dem iPhone: Teilen → „Zum Home-Bildschirm“.</p>
   <p>Mit Figuren reden lohnt sich: Sie verraten oft, wie es weitergeht.</p>
   <p>Das Spiel speichert beim Raumwechsel automatisch („Weiterspielen“ im Titelbild).</p>
   <p style="color:var(--muted)">(Klicken zum Schließen)</p>
@@ -63,10 +133,12 @@
 <script src="js/gfx.js" charset="utf-8"></script>
 <script src="js/sprites.js" charset="utf-8"></script>
 <script src="js/audio.js" charset="utf-8"></script>
+<script src="js/tts.js" charset="utf-8"></script>
 <script src="js/engine.js" charset="utf-8"></script>
 <script src="js/items.js" charset="utf-8"></script>
 <script src="js/rooms_a.js" charset="utf-8"></script>
 <script src="js/rooms_b.js" charset="utf-8"></script>
+<script src="js/guide.js" charset="utf-8"></script>
 <script src="js/main.js" charset="utf-8"></script>
 </body>
 </html>
